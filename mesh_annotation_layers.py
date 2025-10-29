@@ -1431,36 +1431,70 @@ def _find_opposite_edge(face: bmesh.types.BMFace, incoming_edge: bmesh.types.BME
     return None
 
 
+def _select_loop_via_builtin(context, obj, element_type: str):
+    mesh = obj.data
+    tool_settings = context.tool_settings
+    original_mode = tuple(tool_settings.mesh_select_mode)
+    target_mode = {
+        ELEMENT_VERTEX: (True, False, False),
+        ELEMENT_EDGE: (False, True, False),
+        ELEMENT_FACE: (False, False, True),
+    }[element_type]
+    try:
+        if original_mode != target_mode:
+            tool_settings.mesh_select_mode = target_mode
+        bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
+        window = context.window
+        if window is None:
+            return False, bi("No active 3D View found", "没有可用的3D视图，无法生成循环")
+        screen = window.screen
+        last_error = None
+        for area in screen.areas:
+            if area.type != "VIEW_3D":
+                continue
+            region = next((r for r in area.regions if r.type == "WINDOW"), None)
+            if region is None:
+                continue
+            override_kwargs = {
+                "window": window,
+                "screen": screen,
+                "area": area,
+                "region": region,
+                "mode": "EDIT_MESH",
+                "object": obj,
+                "active_object": obj,
+            }
+            try:
+                with context.temp_override(**override_kwargs):
+                    result = bpy.ops.mesh.loop_multi_select(ring=False)
+            except (RuntimeError, ValueError) as exc:
+                last_error = str(exc)
+                continue
+            if "FINISHED" in result:
+                bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
+                return True, None
+        message = last_error or bi("Unable to resolve a loop from the current selection", "无法根据当前选择生成循环")
+        return False, message
+    except Exception as exc:
+        return False, str(exc)
+    finally:
+        if tool_settings.mesh_select_mode != original_mode:
+            tool_settings.mesh_select_mode = original_mode
+    return True, None
+
+
 def collect_edge_loop_edges(context, obj, bm, settings):
     ensure_lookup_tables(bm, ELEMENT_EDGE)
     selected_edges = [edge for edge in bm.edges if edge.select]
     if not selected_edges:
         msg = bi("Select at least one edge to derive a loop", "请选择至少一条边以确定循环")
         return set(), msg
-    visited = set()
-    loop_edges = set()
-
-    def expand_from(edge):
-        queue = [(edge, None)]
-        while queue:
-            item, prev_face = queue.pop()
-            if item in visited:
-                continue
-            visited.add(item)
-            loop_edges.add(item)
-            faces = [f for f in item.link_faces if len(f.verts) == 4]
-            for face in faces:
-                if prev_face is not None and face is prev_face and len(faces) > 1:
-                    continue
-                opposite = _find_opposite_edge(face, item)
-                if opposite is None or opposite in visited:
-                    continue
-                next_faces = [f for f in opposite.link_faces if f is not face]
-                next_face = next_faces[0] if next_faces else face
-                queue.append((opposite, next_face))
-
-    expand_from(selected_edges[0])
-
+    ok, message = _select_loop_via_builtin(context, obj, ELEMENT_EDGE)
+    if not ok:
+        return set(), message
+    bm = bmesh.from_edit_mesh(obj.data)
+    ensure_lookup_tables(bm, ELEMENT_EDGE)
+    loop_edges = {edge for edge in bm.edges if edge.select}
     if not loop_edges:
         msg = bi("Unable to resolve an edge loop", "无法生成边循环")
         return set(), msg
@@ -1473,24 +1507,22 @@ def collect_edge_loop_edges(context, obj, bm, settings):
 
 def collect_vertex_loop_vertices(context, obj, bm, settings):
     ensure_lookup_tables(bm, ELEMENT_VERTEX)
+    bm.edges.ensure_lookup_table()
     selected_vertices = [vert for vert in bm.verts if vert.select]
-    if len(selected_vertices) < 2:
-        msg = bi("Select any two vertices to build a path", "请选择任意两个点以生成循环")
+    if not selected_vertices:
+        msg = bi("Select at least one vertex to derive a loop", "请选择至少一个点以确定循环")
         return set(), msg
-    start, end = selected_vertices[:2]
-    try:
-        result = bmesh.ops.shortest_path(bm, verts=[start, end], edges=bm.edges)
-    except Exception:
-        msg = bi("Failed to compute vertex path", "无法计算点循环")
+    ok, message = _select_loop_via_builtin(context, obj, ELEMENT_VERTEX)
+    if not ok:
+        return set(), message
+    bm = bmesh.from_edit_mesh(obj.data)
+    ensure_lookup_tables(bm, ELEMENT_VERTEX)
+    loop_verts = {vert for vert in bm.verts if vert.select}
+    if not loop_verts:
+        msg = bi("Unable to compute a vertex loop", "无法生成点循环")
         return set(), msg
-    verts = set(result.get("verts", []))
-    if not verts:
-        msg = bi("Unable to compute a path between the selected vertices", "无法在所选点之间计算路径")
-        return set(), msg
-    for vert in bm.verts:
-        vert.select = vert in verts
-    log_debug_from_settings(settings, f"collect_vertex_loop_vertices gathered {len(verts)} vertices")
-    return verts, None
+    log_debug_from_settings(settings, f"collect_vertex_loop_vertices gathered {len(loop_verts)} vertices")
+    return loop_verts, None
 
 
 class MeshAnnotationLayer(bpy.types.PropertyGroup):
