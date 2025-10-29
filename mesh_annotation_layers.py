@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Mesh Annotation Layers",
     "author": "Nkctro",
-    "version": (1, 0, 0),
+    "version": (1, 0, 1),
     "blender": (3, 0, 0),
     "location": "3D Viewport > Sidebar > Mesh Annotation",
     "description": "Annotate selected mesh elements with named color layers without altering materials",
