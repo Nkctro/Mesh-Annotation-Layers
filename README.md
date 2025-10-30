@@ -19,15 +19,18 @@
 - 🔄 **Non-Destructive**: Annotations don't modify mesh data, materials, or vertex colors
 - 🎯 **Selection Tools**: Select all elements in a layer with one click
 - 💾 **Persistent**: Annotations are saved with your Blender file
+- 🔧 **UV Seam Marking**: Automatically mark UV seams from annotation layers (v1.1.1+)
+- 🌐 **Multilingual**: Full support for English and Chinese with flexible display modes (v1.1.1+)
 
 ### Installation
 
 #### Option 1: Install as ZIP (Recommended)
 
-1. Download or create the distribution ZIP file (see [Packaging](#packaging) below)
+1. Download the latest release ZIP file from the [Releases](https://github.com/Nkctro/Mesh-Annotation-Layers/releases) page
 2. Open Blender and go to `Edit > Preferences > Add-ons`
 3. Click `Install...` and select the ZIP file
 4. Enable the addon by checking the box next to "Mesh: Mesh Annotation Layers"
+5. (Optional) Configure language preferences in the addon preferences panel
 
 #### Option 2: Manual Installation
 
@@ -87,14 +90,31 @@ This will create a ZIP file in the `dist/` folder that can be installed directly
 - **Remove Selected**: Remove selected elements from the active layer
 - **Clear Layer**: Remove all elements from the active layer
 
+#### UV Seam Tools (v1.1.1+)
+
+- **Mark Seam from Active Layer**: Automatically mark all edges in the active annotation layer as UV seams
+- **Mark Seam from All Layers**: Mark edges from all visible annotation layers as UV seams
+- These tools are particularly useful for UV unwrapping workflows, allowing you to plan and mark UV seams visually
+
 ### Use Cases
 
 1. **Topology Planning**: Mark different topology regions with different colors
 2. **Edge Flow Tracking**: Annotate edge loops and flow patterns
 3. **Retopology**: Mark areas that need rework or special attention
 4. **Modeling Notes**: Create visual reminders for yourself or team members
-5. **UV Mapping**: Mark UV seams and important boundaries
+5. **UV Mapping**: Mark UV seams and important boundaries, then convert to actual UV seams (v1.1.1+)
 6. **Subdivision Planning**: Identify areas that need different subdivision levels
+
+### Addon Preferences (v1.1.1+)
+
+Access addon preferences in `Edit > Preferences > Add-ons > Mesh Annotation Layers`:
+
+- **Language Display Mode**:
+  - **Auto**: Automatically follows Blender's interface language
+  - **English**: Always display UI in English
+  - **中文**: Always display UI in Chinese
+  - **Both**: Display both English and Chinese simultaneously
+- **Context Menu Options**: Customize right-click menu behavior
 
 ### Technical Details
 
@@ -145,15 +165,18 @@ This addon is released under the GPL-3.0 license.
 - 🔄 **非破坏性**：标注不会修改网格数据、材质或顶点颜色
 - 🎯 **选择工具**：一键选择图层中的所有元素
 - 💾 **持久化**：标注会随 Blender 文件一起保存
+- 🔧 **UV 接缝标记**：自动从标注层生成 UV 接缝（v1.1.1+）
+- 🌐 **多语言**：完整支持中英文，具有灵活的显示模式（v1.1.1+）
 
 ### 安装方法
 
 #### 方法 1：安装 ZIP 文件（推荐）
 
-1. 下载或创建发行版 ZIP 文件（见下方[打包](#打包)）
+1. 从 [Releases](https://github.com/Nkctro/Mesh-Annotation-Layers/releases) 页面下载最新版本的 ZIP 文件
 2. 打开 Blender，进入 `编辑 > 偏好设置 > 插件`
 3. 点击 `安装...` 并选择 ZIP 文件
 4. 在"Mesh Annotation Layers"旁边的复选框打勾以启用插件
+5. （可选）在插件偏好设置面板中配置语言偏好
 
 #### 方法 2：手动安装
 
@@ -213,14 +236,31 @@ python3 package.py
 - **Remove Selected（移除选中）**：从活动图层中移除选中的元素
 - **Clear Layer（清空图层）**：从活动图层中移除所有元素
 
+#### UV 接缝工具（v1.1.1+）
+
+- **从活动图层标记接缝**：自动将活动标注层中的所有边标记为 UV 接缝
+- **从所有图层标记接缝**：将所有可见标注层中的边标记为 UV 接缝
+- 这些工具对 UV 展开工作流程特别有用，允许你可视化地规划和标记 UV 接缝
+
 ### 使用场景
 
 1. **拓扑规划**：用不同颜色标记不同的拓扑区域
 2. **边流追踪**：标注边循环和流向模式
 3. **重新拓扑**：标记需要重做或特别注意的区域
 4. **建模笔记**：为自己或团队成员创建可视化提醒
-5. **UV 映射**：标记 UV 接缝和重要边界
+5. **UV 映射**：标记 UV 接缝和重要边界，然后转换为实际的 UV 接缝（v1.1.1+）
 6. **细分规划**：识别需要不同细分级别的区域
+
+### 插件偏好设置（v1.1.1+）
+
+在 `编辑 > 偏好设置 > 插件 > Mesh Annotation Layers` 中访问插件偏好设置：
+
+- **语言显示模式**：
+  - **自动**：自动跟随 Blender 的界面语言
+  - **English**：始终使用英文显示界面
+  - **中文**：始终使用中文显示界面
+  - **Both**：同时显示中英文
+- **上下文菜单选项**：自定义右键菜单行为
 
 ### 技术细节
 
