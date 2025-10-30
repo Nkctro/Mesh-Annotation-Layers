@@ -1,0 +1,49 @@
+schema_version = "1.0.0"
+
+# Required fields
+id = "mesh_annotation_layers"
+version = "1.1.1"
+name = "Mesh Annotation Layers"
+tagline = "Annotate mesh elements with named color layers without altering materials"
+maintainer = "Nkctro <nkctro@users.noreply.github.com>"
+type = "add-on"
+
+# Blender version compatibility
+blender_version_min = "3.0.0"
+
+# License must be an SPDX identifier
+license = [
+  "GPL-3.0-or-later",
+]
+
+# Website and documentation
+website = "https://github.com/Nkctro/Mesh-Annotation-Layers"
+
+# Tags help users find the extension
+tags = [
+  "Mesh",
+  "Modeling",
+  "3D View",
+  "Annotation",
+  "Topology",
+  "Workflow",
+]
+
+# Optional but recommended fields
+[permissions]
+files = "Addon stores annotation layer data in mesh custom attributes"
+network = "This addon does not require network access"
+
+# Wheels (if any Python dependencies are needed - currently none)
+# wheels = []
+
+# Build settings (optional)
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  "*.pyc",
+  ".git/",
+  ".github/",
+  "dist/",
+  "package.py",
+]

@@ -49,10 +49,15 @@ def create_addon_zip():
         "__init__.py",
     ]
     
-    # Documentation files to include in root of ZIP
-    doc_files = [
-        "README.md",
+    # Root files required for Blender extensions
+    root_files = [
+        "blender_manifest.toml",
         "LICENSE",
+        "README.md",
+    ]
+    
+    # Additional documentation files to include in root of ZIP
+    doc_files = [
         "INSTALL.md",
         "CHANGELOG.md",
         "QUICK_REFERENCE.md",
@@ -65,7 +70,19 @@ def create_addon_zip():
     
     # Create ZIP file
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        # Add root files (required for Blender extensions)
+        print("Adding root files:")
+        for filename in root_files:
+            file_path = script_dir / filename
+            if file_path.exists():
+                arcname = f"mesh_annotation_layers/{filename}"
+                zipf.write(file_path, arcname)
+                print(f"  Added: {arcname}")
+            else:
+                print(f"  Warning: {filename} not found (required for Blender extensions)")
+        
         # Add addon files
+        print("\nAdding addon code:")
         for filename in addon_files:
             file_path = addon_dir / filename
             if file_path.exists():
@@ -75,7 +92,7 @@ def create_addon_zip():
             else:
                 print(f"  Warning: {filename} not found")
         
-        # Add documentation files
+        # Add additional documentation files
         print("\nAdding documentation:")
         for filename in doc_files:
             file_path = script_dir / filename

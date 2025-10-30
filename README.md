@@ -49,6 +49,8 @@ python3 package.py
 ```
 This will create a ZIP file in the `dist/` folder that can be installed directly in Blender.
 
+**Note:** This addon is compliant with Blender's extension platform requirements (Blender 4.2+) and includes a `blender_manifest.toml` file with proper metadata for the new extension system.
+
 ### Usage
 
 #### Accessing the Panel
