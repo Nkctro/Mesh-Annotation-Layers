@@ -10,10 +10,14 @@ All notable changes to the Mesh Annotation Layers addon will be documented in th
 - Operators to assign the current selection or loops to a brand new layer in one click
 - Context menu integration plus seam-marking tools that convert face layers to UV seams
 - "Pick From Selection" action to activate the matching layer based on the current mesh selection
+- **blender_manifest.toml** for Blender 4.2+ extension platform compliance
+- Documentation and tracker URLs in bl_info metadata
 
 ### Changed
 - Annotation sidebar reorganised so assignment tools and overlay controls are easier to find
 - Documentation refreshed in English and Chinese to cover the new workflow improvements
+- Package script now includes blender_manifest.toml in distribution ZIP
+- License identifier updated to SPDX format (GPL-3.0-or-later)
 
 ## [1.0.0] - 2025-10-29
 
