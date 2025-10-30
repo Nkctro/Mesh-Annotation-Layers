@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Mesh Annotation Layers",
     "author": "Nkctro",
-    "version": (1, 1, 0),
+    "version": (1, 1, 1),
     "blender": (3, 0, 0),
     "location": "3D Viewport > Sidebar > Mesh Annotation",
     "description": "Annotate selected mesh elements with named color layers without altering materials",
@@ -1461,9 +1461,10 @@ def collect_face_loop_faces(context, obj, bm, settings):
     bm.edges.ensure_lookup_table()
     selected_faces = [face for face in bm.faces if face.select]
     if len(selected_faces) < 2:
-        msg = bi("Select at least two faces to define the loop", "请选择两个及以上的面以确定循环")
+        msg = bi("Select at least two faces to define the loop", "请选择至少两个面来确定循环")
         return set(), msg
     selected_set = set(selected_faces)
+    required_indices = {face.index for face in selected_faces}
     loop_candidates = []
     processed_edges = set()
 
@@ -1497,15 +1498,26 @@ def collect_face_loop_faces(context, obj, bm, settings):
         msg = bi("Unable to derive a face loop from the selection", "无法根据选择推导出面循环")
         return set(), msg
 
-    final_loop = set()
+    unique_candidates = []
+    seen_signatures = set()
     for loop in loop_candidates:
-        if len(loop & selected_set) >= 2:
-            final_loop.update(loop)
-
-    if not final_loop:
-        msg = bi("Selected faces do not align on the same loop", "所选面不在同一循环上")
+        signature = frozenset(face.index for face in loop)
+        if signature in seen_signatures:
+            continue
+        seen_signatures.add(signature)
+        unique_candidates.append(loop)
+    matching_loops = []
+    for loop in unique_candidates:
+        loop_indices = {face.index for face in loop}
+        if required_indices.issubset(loop_indices):
+            matching_loops.append(loop)
+    if not matching_loops:
+        msg = bi("No face loop passes through every selected face", "没有一个面循环能够覆盖所有已选面")
         return set(), msg
-
+    if len(matching_loops) > 1:
+        msg = bi("Multiple face loops detected; refine your selection", "检测到多个面循环，请精细调整选区")
+        return set(), msg
+    final_loop = matching_loops[0]
     for face in bm.faces:
         face.select = face in final_loop
 
