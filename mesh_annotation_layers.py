@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Mesh Annotation Layers",
     "author": "Nkctro",
-    "version": (1, 1, 0),
+    "version": (1, 1, 1),
     "blender": (3, 0, 0),
     "location": "3D Viewport > Sidebar > Mesh Annotation",
     "description": "Annotate selected mesh elements with named color layers without altering materials",
@@ -17,12 +17,24 @@ from collections import Counter, defaultdict
 from mathutils import Vector
 import gpu
 from gpu_extras.batch import batch_for_shader
+from weakref import WeakKeyDictionary
 
 
 ELEMENT_FACE = "FACE"
 ELEMENT_EDGE = "EDGE"
 ELEMENT_VERTEX = "VERT"
 ELEMENT_TYPES = (ELEMENT_FACE, ELEMENT_EDGE, ELEMENT_VERTEX)
+
+_SHADER_CACHE = {}
+_MAPPING_CACHE = WeakKeyDictionary()
+
+
+def get_cached_shader(name: str):
+    shader = _SHADER_CACHE.get(name)
+    if shader is None:
+        shader = gpu.shader.from_builtin(name)
+        _SHADER_CACHE[name] = shader
+    return shader
 
 ELEMENT_DEFS = {
     ELEMENT_FACE: {
@@ -139,7 +151,7 @@ class MeshAnnotationPreferences(bpy.types.AddonPreferences):
             "Enable to show an extra submenu for choosing Faces/Edges/Vertices. "
             "Disable for quicker access with direct actions."
         ),
-        default=True,
+        default=False,
     )
 
     def draw(self, _context):
@@ -253,6 +265,28 @@ def data_prop_name(element_type: str) -> str:
     return element_meta(element_type)["data_prop"]
 
 
+def get_mapping_cache(settings, element_type: str):
+    if settings is None:
+        return None
+    cache = _MAPPING_CACHE.get(settings)
+    if cache is None:
+        return None
+    return cache.get(element_type)
+
+
+def set_mapping_cache(settings, element_type: str, data_str: str, mapping):
+    if settings is None:
+        return
+    cache = _MAPPING_CACHE.get(settings)
+    if cache is None:
+        cache = {}
+        try:
+            _MAPPING_CACHE[settings] = cache
+        except TypeError:
+            return
+    cache[element_type] = (data_str, mapping)
+
+
 def color_seed_name(element_type: str) -> str:
     return element_meta(element_type)["color_seed"]
 
@@ -277,23 +311,61 @@ def element_container(bm: bmesh.types.BMesh, element_type: str):
 def load_element_layers(settings, element_type: str):
     if settings is None:
         return {}
-    data_str = getattr(settings, data_prop_name(element_type), "")
+    prop_name = data_prop_name(element_type)
+    data_str = getattr(settings, prop_name, "")
+    cache = get_mapping_cache(settings, element_type)
+    if cache:
+        cached_version, mapping = cache
+        if cached_version == data_str:
+            return mapping
     if not data_str:
-        return {}
+        mapping = {}
+        set_mapping_cache(settings, element_type, data_str, mapping)
+        return mapping
+    mapping = {}
     try:
         raw = json.loads(data_str)
-        if isinstance(raw, dict):
-            return {str(k): [int(v) for v in values] for k, values in raw.items()}
     except Exception:
-        pass
-    return {}
+        raw = {}
+    if isinstance(raw, dict):
+        for key, values in raw.items():
+            str_key = str(key)
+            cleaned = []
+            for value in values if isinstance(values, (list, tuple)) else []:
+                try:
+                    cleaned.append(int(value))
+                except (TypeError, ValueError):
+                    continue
+            if cleaned:
+                mapping[str_key] = cleaned
+    set_mapping_cache(settings, element_type, data_str, mapping)
+    return mapping
 
 
 def save_element_layers(settings, element_type: str, mapping):
     if settings is None:
         return
-    cleaned = {str(k): [int(v) for v in values] for k, values in mapping.items() if values}
-    setattr(settings, data_prop_name(element_type), json.dumps(cleaned))
+    if mapping is None:
+        mapping = {}
+    normalized = {}
+    for key, values in list(mapping.items()):
+        try:
+            key_int = int(key)
+        except (TypeError, ValueError):
+            continue
+        cleaned_values = []
+        for value in values if isinstance(values, (list, tuple)) else []:
+            try:
+                cleaned_values.append(int(value))
+            except (TypeError, ValueError):
+                continue
+        if cleaned_values:
+            normalized[str(key_int)] = cleaned_values
+    mapping.clear()
+    mapping.update(normalized)
+    data_str = json.dumps(mapping, separators=(",", ":"))
+    setattr(settings, data_prop_name(element_type), data_str)
+    set_mapping_cache(settings, element_type, data_str, mapping)
 
 
 def get_layers_for_index(mapping, element_index: int):
@@ -312,7 +384,13 @@ def prune_mapping_to_indices(mapping, valid_indices):
     removed = False
     valid = set(valid_indices)
     for key in list(mapping.keys()):
-        if int(key) not in valid:
+        try:
+            key_int = int(key)
+        except (TypeError, ValueError):
+            del mapping[key]
+            removed = True
+            continue
+        if key_int not in valid:
             del mapping[key]
             removed = True
     return removed
@@ -416,7 +494,7 @@ def auto_generate_color(settings, element_type: str, existing_colors=None):
     if best_color is None:
         best_color = colorsys.hsv_to_rgb(random.random(), 0.65, 1.0)
     r, g, b = best_color
-    alpha = 0.45 if element_type == ELEMENT_FACE else 1.0
+    alpha = 0.25 if element_type == ELEMENT_FACE else 1.0
     return (r, g, b, alpha)
 
 
@@ -463,36 +541,39 @@ def assign_elements_to_layer(obj: bpy.types.Object, element_type: str, layer_id:
         save_element_layers(settings, element_type, mapping)
         log_debug_from_settings(settings, f"Assign edit success: {len(targets)} elements")
         return True
-    bm = bmesh.new()
-    bm.from_mesh(mesh)
-    int_layer, stack_layer = ensure_annotation_layers(bm, element_type)
-    ensure_lookup_tables(bm, element_type)
-    container = element_container(bm, element_type)
-    valid_indices = {elem.index for elem in container}
+    sequence = get_mesh_sequence(obj, element_type)
+    valid_indices = {elem.index for elem in sequence}
     if prune_mapping_to_indices(mapping, valid_indices):
         save_element_layers(settings, element_type, mapping)
-    merge_stack_layer_into_mapping(mapping, bm, stack_layer, element_type)
     if element_indices is None:
         element_indices = list(valid_indices)
     element_indices = [idx for idx in element_indices if idx in valid_indices]
     if not element_indices:
-        bm.free()
         log_debug_from_settings(settings, "Assign aborted: no indices in object mode")
         return False
-    for idx in element_indices:
-        layers = normalize_layer_ids(get_layers_for_index(mapping, idx), order_lookup)
-        if layer_id in layers:
-            layers.remove(layer_id)
-        layers.append(layer_id)
-        layers = normalize_layer_ids(layers, order_lookup)
-        set_layers_for_index(mapping, idx, layers)
-    sync_mapping_to_bmesh(bm, int_layer, stack_layer, mapping, element_type)
-    bm.to_mesh(mesh)
-    mesh.update()
-    save_element_layers(settings, element_type, mapping)
-    bm.free()
-    log_debug_from_settings(settings, f"Assign object success: {len(element_indices)} elements")
-    return True
+    bm = bmesh.new()
+    result = False
+    try:
+        bm.from_mesh(mesh)
+        int_layer, stack_layer = ensure_annotation_layers(bm, element_type)
+        ensure_lookup_tables(bm, element_type)
+        merge_stack_layer_into_mapping(mapping, bm, stack_layer, element_type)
+        for idx in element_indices:
+            layers = normalize_layer_ids(get_layers_for_index(mapping, idx), order_lookup)
+            if layer_id in layers:
+                layers.remove(layer_id)
+            layers.append(layer_id)
+            layers = normalize_layer_ids(layers, order_lookup)
+            set_layers_for_index(mapping, idx, layers)
+        sync_mapping_to_bmesh(bm, int_layer, stack_layer, mapping, element_type)
+        bm.to_mesh(mesh)
+        mesh.update()
+        save_element_layers(settings, element_type, mapping)
+        log_debug_from_settings(settings, f"Assign object success: {len(element_indices)} elements")
+        result = True
+    finally:
+        bm.free()
+    return result
 
 def clear_elements_from_layer(obj: bpy.types.Object, element_type: str, layer_id: int, only_selected: bool, mode: str = "ALL"):
     mesh = obj.data
@@ -782,7 +863,6 @@ def build_overlay_batches(obj: bpy.types.Object, settings):
         container = element_container(bm, element_type)
         buckets = defaultdict(list)
         order_lookup = layer_order_map(settings, element_type)
-        order_lookup = layer_order_map(settings, element_type)
         if element_type == ELEMENT_FACE:
             for face in container:
                 layers = normalize_layer_ids(get_layers_for_index(mapping, face.index), order_lookup)
@@ -808,7 +888,7 @@ def build_overlay_batches(obj: bpy.types.Object, settings):
                 top_layer = max(target, key=lambda lid: order_lookup.get(lid, -1))
                 bucket_key = (top_layer, bool(face.select))
                 buckets[bucket_key].extend(triangles)
-            shader = gpu.shader.from_builtin("UNIFORM_COLOR")
+            shader = get_cached_shader("UNIFORM_COLOR")
             for (layer_id, selected_flag), triangles in buckets.items():
                 if not triangles:
                     continue
@@ -863,14 +943,23 @@ def build_overlay_batches(obj: bpy.types.Object, settings):
                 top_layer = max(target, key=lambda lid: order_lookup.get(lid, -1))
                 bucket_key = (top_layer, bool(edge.select))
                 buckets[bucket_key].append((p0.copy(), p1.copy()))
+            polyline_shader = get_cached_shader("POLYLINE_UNIFORM_COLOR")
             for (layer_id, selected_flag), segments in buckets.items():
                 if not segments:
                     continue
+                positions = []
+                for seg_start, seg_end in segments:
+                    positions.append(tuple(seg_start))
+                    positions.append(tuple(seg_end))
+                if not positions:
+                    continue
+                batch = batch_for_shader(polyline_shader, "LINES", {"pos": positions})
                 layer_settings = visible_layers[layer_id]
                 results[element_type].append(
                     {
                         "kind": "edge_segments",
-                        "segments": segments,
+                        "batch": batch,
+                        "shader": polyline_shader,
                         "color": layer_settings.color,
                         "selected": selected_flag,
                     }
@@ -890,7 +979,7 @@ def build_overlay_batches(obj: bpy.types.Object, settings):
                 top_layer = max(target, key=lambda lid: order_lookup.get(lid, -1))
                 bucket_key = (top_layer, bool(vert.select))
                 buckets[bucket_key].append(coord)
-            shader = gpu.shader.from_builtin("POINT_UNIFORM_COLOR")
+            shader = get_cached_shader("POINT_UNIFORM_COLOR")
             for (layer_id, selected_flag), coords in buckets.items():
                 if not coords:
                     continue
@@ -931,7 +1020,6 @@ def draw_overlay():
     gpu.state.depth_test_set(depth_mode)
     try:
         viewport_size = get_viewport_size()
-        polyline_shader = None
         for element_type in ELEMENT_TYPES:
             entries = batches[element_type]
             if not entries:
@@ -977,15 +1065,15 @@ def draw_overlay():
                     batch.draw(shader)
                     gpu.state.point_size_set(1.0)
                 elif kind == "edge_segments":
-                    if polyline_shader is None:
-                        polyline_shader = gpu.shader.from_builtin("POLYLINE_UNIFORM_COLOR")
-                    polyline_shader.bind()
-                    polyline_shader.uniform_float("viewportSize", viewport_size)
-                    polyline_shader.uniform_float("lineWidth", line_width)
-                    polyline_shader.uniform_float("color", color)
-                    for segment in entry["segments"]:
-                        batch = batch_for_shader(polyline_shader, "LINES", {"pos": [segment[0], segment[1]]})
-                        batch.draw(polyline_shader)
+                    shader = entry.get("shader") or get_cached_shader("POLYLINE_UNIFORM_COLOR")
+                    batch = entry.get("batch")
+                    if batch is None:
+                        continue
+                    shader.bind()
+                    shader.uniform_float("viewportSize", viewport_size)
+                    shader.uniform_float("lineWidth", line_width)
+                    shader.uniform_float("color", color)
+                    batch.draw(shader)
     finally:
         if current_blend != "ALPHA":
             gpu.state.blend_set("ALPHA")
@@ -1030,8 +1118,8 @@ def draw_existing_layer_menu(layout, obj, element_type: str, use_loop: bool):
 def context_menu_use_type_choice():
     prefs = get_addon_prefs()
     if prefs is None:
-        return True
-    return bool(getattr(prefs, "context_menu_split_types", True))
+        return False
+    return bool(getattr(prefs, "context_menu_split_types", False))
 
 
 def context_menu_default_type(context):
@@ -1160,140 +1248,6 @@ class VIEW3D_MT_mesh_annotation_type_clear_selected_all(MeshAnnotationTypeMenuBa
 class VIEW3D_MT_mesh_annotation_type_clear_selected_top(MeshAnnotationTypeMenuBase):
     bl_idname = "VIEW3D_MT_mesh_annotation_type_clear_selected_top"
     action_key = "clear_selected_top"
-
-
-def context_menu_use_type_choice():
-    prefs = get_addon_prefs()
-    return bool(prefs and getattr(prefs, "context_menu_split_types", True))
-
-
-def context_menu_default_type(context):
-    return infer_element_type_from_mode(context)
-
-
-TYPE_MENU_ACTIONS = {
-    "assign_selected_active": {
-        "kind": "operator",
-        "operator": "mesh.annotation_assign_active",
-        "props": {},
-        "label": ("Choose Element Type", "选择元素类型"),
-    },
-    "assign_selected_new": {
-        "kind": "operator",
-        "operator": "mesh.annotation_assign_new_layer",
-        "props": {"use_loop": False, "skip_dialog": True},
-        "label": ("Choose Element Type", "选择元素类型"),
-    },
-    "assign_selected_existing": {
-        "kind": "existing",
-        "use_loop": False,
-        "label": ("Choose Element Type", "选择元素类型"),
-    },
-    "assign_loop_active": {
-        "kind": "operator",
-        "operator": "mesh.annotation_assign_loop",
-        "props": {},
-        "label": ("Choose Element Type", "选择元素类型"),
-    },
-    "assign_loop_new": {
-        "kind": "operator",
-        "operator": "mesh.annotation_assign_new_layer",
-        "props": {"use_loop": True, "skip_dialog": True},
-        "label": ("Choose Element Type", "选择元素类型"),
-    },
-    "assign_loop_existing": {
-        "kind": "existing",
-        "use_loop": True,
-        "label": ("Choose Element Type", "选择元素类型"),
-    },
-    "clear_selected_all": {
-        "kind": "clear",
-        "mode": "ALL",
-        "label": ("Choose Element Type", "选择元素类型"),
-    },
-    "clear_selected_top": {
-        "kind": "clear",
-        "mode": "TOP",
-        "label": ("Choose Element Type", "选择元素类型"),
-    },
-}
-
-
-class MeshAnnotationTypeMenuBase(bpy.types.Menu):
-    bl_label = bi("Choose Element Type", "选择元素类型")
-    action_key = ""
-
-    def draw(self, context):
-        layout = self.layout
-        action = TYPE_MENU_ACTIONS.get(self.action_key)
-        if not action:
-            layout.label(text=bi("No action configured", "未配置操作"))
-            return
-        label_en, label_zh = action.get("label", ("Choose Element Type", "选择元素类型"))
-        layout.label(text=bi(label_en, label_zh))
-        obj = context.object
-        for element_type in ELEMENT_TYPES:
-            meta = element_meta(element_type)
-            item_en, item_zh = meta["label"]
-            text = bi(item_en, item_zh)
-            icon = meta["icon"]
-            kind = action["kind"]
-            if kind == "operator":
-                op = layout.operator(action["operator"], text=text, icon=icon)
-                op.element_type = element_type
-                for attr, value in action.get("props", {}).items():
-                    setattr(op, attr, value)
-            elif kind == "existing":
-                col = layout.column()
-                col.label(text=text, icon=icon)
-                draw_existing_layer_menu(col, obj, element_type, use_loop=action.get("use_loop", False))
-            elif kind == "clear":
-                op = layout.operator("mesh.annotation_clear_selected", text=text, icon=icon)
-                op.element_type = element_type
-                op.mode = action["mode"]
-            else:
-                layout.label(text=bi("Unsupported action", "未支持的操作"), icon="ERROR")
-
-
-class VIEW3D_MT_mesh_annotation_type_assign_selected_active(MeshAnnotationTypeMenuBase):
-    bl_idname = "VIEW3D_MT_mesh_annotation_type_assign_selected_active"
-    action_key = "assign_selected_active"
-
-
-class VIEW3D_MT_mesh_annotation_type_assign_selected_new(MeshAnnotationTypeMenuBase):
-    bl_idname = "VIEW3D_MT_mesh_annotation_type_assign_selected_new"
-    action_key = "assign_selected_new"
-
-
-class VIEW3D_MT_mesh_annotation_type_assign_selected_existing(MeshAnnotationTypeMenuBase):
-    bl_idname = "VIEW3D_MT_mesh_annotation_type_assign_selected_existing"
-    action_key = "assign_selected_existing"
-
-
-class VIEW3D_MT_mesh_annotation_type_assign_loop_active(MeshAnnotationTypeMenuBase):
-    bl_idname = "VIEW3D_MT_mesh_annotation_type_assign_loop_active"
-    action_key = "assign_loop_active"
-
-
-class VIEW3D_MT_mesh_annotation_type_assign_loop_new(MeshAnnotationTypeMenuBase):
-    bl_idname = "VIEW3D_MT_mesh_annotation_type_assign_loop_new"
-    action_key = "assign_loop_new"
-
-
-class VIEW3D_MT_mesh_annotation_type_assign_loop_existing(MeshAnnotationTypeMenuBase):
-    bl_idname = "VIEW3D_MT_mesh_annotation_type_assign_loop_existing"
-    action_key = "assign_loop_existing"
-
-
-class VIEW3D_MT_mesh_annotation_type_clear_selected_all(MeshAnnotationTypeMenuBase):
-    bl_idname = "VIEW3D_MT_mesh_annotation_type_clear_selected_all"
-    action_key = "clear_selected_all"
-
-
-class VIEW3D_MT_mesh_annotation_type_clear_selected_top(MeshAnnotationTypeMenuBase):
-    bl_idname = "VIEW3D_MT_mesh_annotation_type_clear_selected_top"
-    action_key = "clear_selected_top"
-
 
 
 def add_assign_selected_active_entry(layout, context):
@@ -1873,7 +1827,7 @@ class MeshAnnotationSettings(bpy.types.PropertyGroup):
         description="Global multiplier applied to each layer's own alpha value",
         min=0.0,
         max=1.0,
-        default=0.5,
+        default=1.0,
         update=lambda self, context: tag_view3d_redraw(context),
     )
 
