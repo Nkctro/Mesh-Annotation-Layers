@@ -7,10 +7,28 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.coverage
+.coverage.*
+htmlcov/
+*.cover
+.hypothesis/
+venv/
+env/
+ENV/
 
 # Blender
 *.blend1
 *.blend2
+*.blend@
 
 # OS
 .DS_Store
@@ -18,13 +36,38 @@ Thumbs.db
 *.swp
 *.swo
 *~
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
 
 # IDE
 .vscode/
 .idea/
 *.sublime-*
+.project
+.pydevproject
+.settings/
+*.code-workspace
 
 # Temporary files
 /tmp/
+*.tmp
+*.bak
+*.log
 
+# Distribution / packaging
 *.zip
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.whl
+
+# Version control
+*.orig
+*.rej
+
+# macOS
+*.DS_Store
+.AppleDouble
+.LSOverride
