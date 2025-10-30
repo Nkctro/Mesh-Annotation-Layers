@@ -22,14 +22,31 @@
 
 ### Installation
 
-1. Download the `mesh_annotation_layers` folder
+#### Option 1: Install as ZIP (Recommended)
+
+1. Download or create the distribution ZIP file (see [Packaging](#packaging) below)
 2. Open Blender and go to `Edit > Preferences > Add-ons`
-3. Click `Install...` and navigate to the downloaded folder
-4. Alternatively, copy the `mesh_annotation_layers` folder to your Blender addons directory:
+3. Click `Install...` and select the ZIP file
+4. Enable the addon by checking the box next to "Mesh: Mesh Annotation Layers"
+
+#### Option 2: Manual Installation
+
+1. Clone or download this repository
+2. Copy the `mesh_annotation_layers` folder to your Blender addons directory:
    - Windows: `%APPDATA%\Blender Foundation\Blender\<version>\scripts\addons\`
    - macOS: `/Users/$USER/Library/Application Support/Blender/<version>/scripts/addons/`
    - Linux: `~/.config/blender/<version>/scripts/addons/`
-5. Enable the addon by checking the box next to "Mesh Annotation Layers"
+3. Restart Blender or refresh the addons list
+4. Go to `Edit > Preferences > Add-ons` and search for "Mesh Annotation Layers"
+5. Enable the addon by checking the box
+
+#### Packaging
+
+To create a distribution ZIP file:
+```bash
+python3 package.py
+```
+This will create a ZIP file in the `dist/` folder that can be installed directly in Blender.
 
 ### Usage
 
@@ -131,14 +148,31 @@ This addon is released under the GPL-3.0 license.
 
 ### 安装方法
 
-1. 下载 `mesh_annotation_layers` 文件夹
+#### 方法 1：安装 ZIP 文件（推荐）
+
+1. 下载或创建发行版 ZIP 文件（见下方[打包](#打包)）
 2. 打开 Blender，进入 `编辑 > 偏好设置 > 插件`
-3. 点击 `安装...` 并导航到下载的文件夹
-4. 或者，将 `mesh_annotation_layers` folder复制到 Blender 插件目录：
+3. 点击 `安装...` 并选择 ZIP 文件
+4. 在"Mesh Annotation Layers"旁边的复选框打勾以启用插件
+
+#### 方法 2：手动安装
+
+1. 克隆或下载此仓库
+2. 将 `mesh_annotation_layers` 文件夹复制到 Blender 插件目录：
    - Windows: `%APPDATA%\Blender Foundation\Blender\<版本>\scripts\addons\`
    - macOS: `/Users/$USER/Library/Application Support/Blender/<版本>/scripts/addons/`
    - Linux: `~/.config/blender/<版本>/scripts/addons/`
-5. 在"Mesh Annotation Layers"旁边的复选框打勾以启用插件
+3. 重启 Blender 或刷新插件列表
+4. 进入 `编辑 > 偏好设置 > 插件` 并搜索 "Mesh Annotation Layers"
+5. 在复选框打勾以启用插件
+
+#### 打包
+
+创建发行版 ZIP 文件：
+```bash
+python3 package.py
+```
+这将在 `dist/` 文件夹中创建可直接在 Blender 中安装的 ZIP 文件。
 
 ### 使用方法
 

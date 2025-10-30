@@ -1,0 +1,31 @@
+documentation:
+  - 'docs/**'
+  - '**/*.md'
+  - 'README*'
+ci:
+  - '.github/workflows/**'
+  - '.github/actions/**'
+  - 'Dockerfile'
+tests:
+  - 'tests/**'
+  - '**/*test*.*'
+dependencies:
+  - 'package.json'
+  - 'yarn.lock'
+  - 'package-lock.json'
+  - 'requirements.txt'
+  - 'pyproject.toml'
+examples:
+  - 'examples/**'
+  - 'demo/**'
+bug:
+  - 'bugfix/**'
+  - '**/*fix*/**'
+enhancement:
+  - 'feature/**'
+  - 'enhancements/**'
+refactor:
+  - 'refactor/**'
+performance:
+  - 'perf/**'
+  - 'performance/**'
