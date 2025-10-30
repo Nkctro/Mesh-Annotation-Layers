@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Mesh Annotation Layers",
     "author": "Nkctro",
-    "version": (1, 0, 1),
+    "version": (1, 1, 0),
     "blender": (3, 0, 0),
     "location": "3D Viewport > Sidebar > Mesh Annotation",
     "description": "Annotate selected mesh elements with named color layers without altering materials",
@@ -173,6 +173,63 @@ def element_meta(element_type: str):
 
 def get_layer_collection(settings, element_type: str):
     return getattr(settings, element_meta(element_type)["collection"])
+
+
+def layer_order_map(settings, element_type: str):
+    if not settings:
+        return {}
+    collection = get_layer_collection(settings, element_type)
+    return {layer.layer_id: index for index, layer in enumerate(collection)}
+
+
+def normalize_layer_ids(layers, order_lookup=None):
+    unique = []
+    seen = set()
+    for lid in layers:
+        lid = int(lid)
+        if lid in seen:
+            continue
+        seen.add(lid)
+        unique.append(lid)
+    if order_lookup:
+        unique.sort(key=lambda value: order_lookup.get(value, float("inf")))
+    return unique
+
+
+def apply_layer_order_to_mapping(obj: bpy.types.Object, element_type: str) -> bool:
+    settings = getattr(obj, "mesh_annotations", None)
+    if settings is None:
+        return False
+    mapping = load_element_layers(settings, element_type)
+    if not mapping:
+        return False
+    order_lookup = layer_order_map(settings, element_type)
+    changed = False
+    for key, layers in list(mapping.items()):
+        normalized = normalize_layer_ids(layers, order_lookup)
+        if normalized != layers:
+            mapping[key] = normalized
+            changed = True
+    if not changed:
+        return False
+    mesh = obj.data
+    if obj.mode == "EDIT":
+        bm = bmesh.from_edit_mesh(mesh)
+        int_layer, stack_layer = ensure_annotation_layers(bm, element_type)
+        ensure_lookup_tables(bm, element_type)
+        sync_mapping_to_bmesh(bm, int_layer, stack_layer, mapping, element_type)
+        bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
+    else:
+        bm = bmesh.new()
+        bm.from_mesh(mesh)
+        int_layer, stack_layer = ensure_annotation_layers(bm, element_type)
+        ensure_lookup_tables(bm, element_type)
+        sync_mapping_to_bmesh(bm, int_layer, stack_layer, mapping, element_type)
+        bm.to_mesh(mesh)
+        mesh.update()
+        bm.free()
+    save_element_layers(settings, element_type, mapping)
+    return True
 
 
 def get_active_index(settings, element_type: str) -> int:
@@ -376,6 +433,7 @@ def assign_elements_to_layer(obj: bpy.types.Object, element_type: str, layer_id:
     settings = getattr(obj, "mesh_annotations", None)
     mapping = load_element_layers(settings, element_type)
     log_debug_from_settings(settings, f"Assign elements start: type={element_type}, layer_id={layer_id}, indices={element_indices}")
+    order_lookup = layer_order_map(settings, element_type)
     if obj.mode == "EDIT":
         bm = bmesh.from_edit_mesh(mesh)
         int_layer, stack_layer = ensure_annotation_layers(bm, element_type)
@@ -394,10 +452,11 @@ def assign_elements_to_layer(obj: bpy.types.Object, element_type: str, layer_id:
             return False
         for elem in targets:
             idx = elem.index
-            layers = get_layers_for_index(mapping, idx)
+            layers = normalize_layer_ids(get_layers_for_index(mapping, idx), order_lookup)
             if layer_id in layers:
                 layers.remove(layer_id)
             layers.append(layer_id)
+            layers = normalize_layer_ids(layers, order_lookup)
             set_layers_for_index(mapping, idx, layers)
         sync_mapping_to_bmesh(bm, int_layer, stack_layer, mapping, element_type)
         bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
@@ -421,10 +480,11 @@ def assign_elements_to_layer(obj: bpy.types.Object, element_type: str, layer_id:
         log_debug_from_settings(settings, "Assign aborted: no indices in object mode")
         return False
     for idx in element_indices:
-        layers = get_layers_for_index(mapping, idx)
+        layers = normalize_layer_ids(get_layers_for_index(mapping, idx), order_lookup)
         if layer_id in layers:
             layers.remove(layer_id)
         layers.append(layer_id)
+        layers = normalize_layer_ids(layers, order_lookup)
         set_layers_for_index(mapping, idx, layers)
     sync_mapping_to_bmesh(bm, int_layer, stack_layer, mapping, element_type)
     bm.to_mesh(mesh)
@@ -438,6 +498,7 @@ def clear_elements_from_layer(obj: bpy.types.Object, element_type: str, layer_id
     mesh = obj.data
     settings = getattr(obj, "mesh_annotations", None)
     mapping = load_element_layers(settings, element_type)
+    order_lookup = layer_order_map(settings, element_type)
     log_debug_from_settings(
         settings,
         f"Clear elements: type={element_type}, layer_id={layer_id}, only_selected={only_selected}, mode={mode}",
@@ -455,7 +516,7 @@ def clear_elements_from_layer(obj: bpy.types.Object, element_type: str, layer_id
         changed = False
         for elem in targets:
             idx = elem.index
-            layers = get_layers_for_index(mapping, idx)
+            layers = normalize_layer_ids(get_layers_for_index(mapping, idx), order_lookup)
             if layer_id == -1:
                 if mode == "TOP":
                     if layers:
@@ -475,6 +536,7 @@ def clear_elements_from_layer(obj: bpy.types.Object, element_type: str, layer_id
                 if layer_id in layers:
                     layers.remove(layer_id)
                     changed = True
+            layers = normalize_layer_ids(layers, order_lookup)
             set_layers_for_index(mapping, idx, layers)
         if changed:
             sync_mapping_to_bmesh(bm, int_layer, stack_layer, mapping, element_type)
@@ -494,7 +556,7 @@ def clear_elements_from_layer(obj: bpy.types.Object, element_type: str, layer_id
     changed = False
     for elem in container:
         idx = elem.index
-        layers = get_layers_for_index(mapping, idx)
+        layers = normalize_layer_ids(get_layers_for_index(mapping, idx), order_lookup)
         if layer_id == -1:
             if mode == "TOP":
                 if layers:
@@ -512,6 +574,7 @@ def clear_elements_from_layer(obj: bpy.types.Object, element_type: str, layer_id
         if mode == "TOP" and layer_id != -1 and layer_id in layers:
             layers.remove(layer_id)
             changed = True
+        layers = normalize_layer_ids(layers, order_lookup)
         set_layers_for_index(mapping, idx, layers)
     if changed:
         sync_mapping_to_bmesh(bm, int_layer, stack_layer, mapping, element_type)
@@ -559,6 +622,54 @@ def select_elements_for_layer(obj: bpy.types.Object, element_type: str, layer_id
     bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
     log_debug_from_settings(settings, f"Select elements: type={element_type}, count={selected}")
     return selected
+
+
+def mark_face_layer_edges_as_seam(obj: bpy.types.Object, layer_ids) -> int:
+    if obj.mode != "EDIT":
+        return 0
+    mesh = obj.data
+    settings = getattr(obj, "mesh_annotations", None)
+    if settings is None:
+        return 0
+    target_layers = {int(lid) for lid in layer_ids if lid is not None}
+    if not target_layers:
+        return 0
+    bm = bmesh.from_edit_mesh(mesh)
+    int_layer, stack_layer = ensure_annotation_layers(bm, ELEMENT_FACE)
+    ensure_lookup_tables(bm, ELEMENT_FACE)
+    ensure_lookup_tables(bm, ELEMENT_EDGE)
+    mapping = load_element_layers(settings, ELEMENT_FACE)
+    merge_stack_layer_into_mapping(mapping, bm, stack_layer, ELEMENT_FACE)
+    order_lookup = layer_order_map(settings, ELEMENT_FACE)
+    face_layers_map = {}
+    for face in bm.faces:
+        layers = normalize_layer_ids(get_layers_for_index(mapping, face.index), order_lookup)
+        if not layers and face[int_layer] >= 0:
+            layers = normalize_layer_ids([face[int_layer]], order_lookup)
+        face_layers_map[face.index] = layers
+    edges_to_mark = set()
+    for lid in target_layers:
+        layer_faces = {idx for idx, layers in face_layers_map.items() if lid in layers}
+        if not layer_faces:
+            continue
+        for face in bm.faces:
+            if face.index not in layer_faces:
+                continue
+            for edge in face.edges:
+                adjacent = {link_face.index for link_face in edge.link_faces}
+                if len(adjacent) < 2:
+                    edges_to_mark.add(edge)
+                    continue
+                if any(idx not in layer_faces for idx in adjacent):
+                    edges_to_mark.add(edge)
+    changed = 0
+    for edge in edges_to_mark:
+        if not edge.seam:
+            edge.seam = True
+            changed += 1
+    if changed:
+        bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
+    return changed
 
 
 def get_layer_by_id(settings, element_type: str, layer_id: int):
@@ -615,9 +726,10 @@ def collect_layer_usage_from_selection(obj, element_type: str):
     merge_stack_layer_into_mapping(mapping, bm, stack_layer, element_type)
     container = element_container(bm, element_type)
     usage = Counter()
+    order_lookup = layer_order_map(settings, element_type)
     for elem in container:
         if elem.select:
-            for lid in get_layers_for_index(mapping, elem.index):
+            for lid in normalize_layer_ids(get_layers_for_index(mapping, elem.index), order_lookup):
                 usage[lid] += 1
     return usage
 
@@ -646,6 +758,7 @@ def build_overlay_batches(obj: bpy.types.Object, settings):
     normal_matrix = matrix.to_3x3()
     results = {etype: [] for etype in ELEMENT_TYPES}
     edge_trim = float(getattr(settings, "overlay_edge_trim", 0.0))
+    face_offset = float(getattr(settings, "overlay_face_offset", 0.002))
     for element_type in ELEMENT_TYPES:
         collection = get_layer_collection(settings, element_type)
         if not collection:
@@ -668,11 +781,13 @@ def build_overlay_batches(obj: bpy.types.Object, settings):
             continue
         container = element_container(bm, element_type)
         buckets = defaultdict(list)
+        order_lookup = layer_order_map(settings, element_type)
+        order_lookup = layer_order_map(settings, element_type)
         if element_type == ELEMENT_FACE:
             for face in container:
-                layers = get_layers_for_index(mapping, face.index)
+                layers = normalize_layer_ids(get_layers_for_index(mapping, face.index), order_lookup)
                 if not layers and face[int_layer] >= 0:
-                    layers = [face[int_layer]]
+                    layers = normalize_layer_ids([face[int_layer]], order_lookup)
                 target = [lid for lid in layers if lid in visible_layers]
                 if not target:
                     continue
@@ -681,7 +796,7 @@ def build_overlay_batches(obj: bpy.types.Object, settings):
                     continue
                 normal_local = face.normal if face.normal.length else Vector((0.0, 0.0, 1.0))
                 normal = (normal_matrix @ normal_local).normalized() if normal_local.length else Vector((0.0, 0.0, 1.0))
-                offset = normal * 0.002
+                offset = normal * face_offset
                 transformed = [matrix @ v.co + offset for v in verts]
                 root = transformed[0]
                 triangles = [
@@ -690,7 +805,7 @@ def build_overlay_batches(obj: bpy.types.Object, settings):
                 ]
                 if not triangles:
                     continue
-                top_layer = target[-1]
+                top_layer = max(target, key=lambda lid: order_lookup.get(lid, -1))
                 bucket_key = (top_layer, bool(face.select))
                 buckets[bucket_key].extend(triangles)
             shader = gpu.shader.from_builtin("UNIFORM_COLOR")
@@ -713,9 +828,9 @@ def build_overlay_batches(obj: bpy.types.Object, settings):
                 )
         elif element_type == ELEMENT_EDGE:
             for edge in container:
-                layers = get_layers_for_index(mapping, edge.index)
+                layers = normalize_layer_ids(get_layers_for_index(mapping, edge.index), order_lookup)
                 if not layers and edge[int_layer] >= 0:
-                    layers = [edge[int_layer]]
+                    layers = normalize_layer_ids([edge[int_layer]], order_lookup)
                 target = [lid for lid in layers if lid in visible_layers]
                 if not target:
                     continue
@@ -745,7 +860,7 @@ def build_overlay_batches(obj: bpy.types.Object, settings):
                         dir_norm = direction / length
                         p0 = p0 + dir_norm * shrink
                         p1 = p1 - dir_norm * shrink
-                top_layer = target[-1]
+                top_layer = max(target, key=lambda lid: order_lookup.get(lid, -1))
                 bucket_key = (top_layer, bool(edge.select))
                 buckets[bucket_key].append((p0.copy(), p1.copy()))
             for (layer_id, selected_flag), segments in buckets.items():
@@ -762,9 +877,9 @@ def build_overlay_batches(obj: bpy.types.Object, settings):
                 )
         else:
             for vert in container:
-                layers = get_layers_for_index(mapping, vert.index)
+                layers = normalize_layer_ids(get_layers_for_index(mapping, vert.index), order_lookup)
                 if not layers and vert[int_layer] >= 0:
-                    layers = [vert[int_layer]]
+                    layers = normalize_layer_ids([vert[int_layer]], order_lookup)
                 target = [lid for lid in layers if lid in visible_layers]
                 if not target:
                     continue
@@ -772,7 +887,7 @@ def build_overlay_batches(obj: bpy.types.Object, settings):
                 normal = (normal_matrix @ normal_local).normalized() if normal_local.length else Vector((0.0, 0.0, 1.0))
                 offset = normal * 0.004
                 coord = matrix @ vert.co + offset
-                top_layer = target[-1]
+                top_layer = max(target, key=lambda lid: order_lookup.get(lid, -1))
                 bucket_key = (top_layer, bool(vert.select))
                 buckets[bucket_key].append(coord)
             shader = gpu.shader.from_builtin("POINT_UNIFORM_COLOR")
@@ -1431,6 +1546,51 @@ def _find_opposite_edge(face: bmesh.types.BMFace, incoming_edge: bmesh.types.BME
     return None
 
 
+def is_pole_edge(edge: bmesh.types.BMEdge) -> bool:
+    return any(len(vert.link_edges) != 4 for vert in edge.verts)
+
+
+def _walk_edge_loop_direction(start_edge: bmesh.types.BMEdge, start_face: bmesh.types.BMFace):
+    sequence = [start_edge]
+    current_edge = start_edge
+    current_face = start_face
+    while True:
+        if current_face is None or len(current_face.edges) != 4:
+            break
+        if is_pole_edge(current_edge):
+            break
+        opposite = _find_opposite_edge(current_face, current_edge)
+        if opposite is None or opposite in sequence:
+            break
+        sequence.append(opposite)
+        if is_pole_edge(opposite):
+            break
+        next_face = next((f for f in opposite.link_faces if f is not current_face), None)
+        if next_face is None:
+            break
+        current_edge = opposite
+        current_face = next_face
+    return sequence
+
+
+def compute_edge_loop(seed_edge: bmesh.types.BMEdge):
+    faces = list(seed_edge.link_faces)
+    if not faces:
+        return [seed_edge]
+    if len(faces) == 1:
+        return _walk_edge_loop_direction(seed_edge, faces[0])
+    forward = _walk_edge_loop_direction(seed_edge, faces[0])
+    backward = _walk_edge_loop_direction(seed_edge, faces[1])
+    combined = list(reversed(forward[1:])) + [seed_edge] + backward[1:]
+    ordered = []
+    seen = set()
+    for edge in combined:
+        if edge not in seen:
+            seen.add(edge)
+            ordered.append(edge)
+    return ordered
+
+
 def _select_loop_via_builtin(context, obj, element_type: str):
     mesh = obj.data
     tool_settings = context.tool_settings
@@ -1446,7 +1606,7 @@ def _select_loop_via_builtin(context, obj, element_type: str):
         bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
         window = context.window
         if window is None:
-            return False, bi("No active 3D View found", "没有可用的3D视图，无法生成循环")
+            return False, bi("No active 3D View found", "无可用的3D视图，无法派生循环")
         screen = window.screen
         last_error = None
         for area in screen.areas:
@@ -1473,7 +1633,7 @@ def _select_loop_via_builtin(context, obj, element_type: str):
             if "FINISHED" in result:
                 bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
                 return True, None
-        message = last_error or bi("Unable to resolve a loop from the current selection", "无法根据当前选择生成循环")
+        message = last_error or bi("Unable to resolve a loop from the current selection", "无法从当前选择推导循环")
         return False, message
     except Exception as exc:
         return False, str(exc)
@@ -1485,22 +1645,44 @@ def _select_loop_via_builtin(context, obj, element_type: str):
 
 def collect_edge_loop_edges(context, obj, bm, settings):
     ensure_lookup_tables(bm, ELEMENT_EDGE)
+    bm.edges.ensure_lookup_table()
     selected_edges = [edge for edge in bm.edges if edge.select]
     if not selected_edges:
-        msg = bi("Select at least one edge to derive a loop", "请选择至少一条边以确定循环")
+        msg = bi("Select at least one edge to derive a loop", "请选择至少一条边以推导循环")
         return set(), msg
+    mesh = obj.data
+    original_selection = {edge.index for edge in bm.edges if edge.select}
+    active_index = selected_edges[0].index
+    for edge in bm.edges:
+        edge.select = False
+    bm.select_history.clear()
+    bm.edges[active_index].select = True
+    bm.select_history.add(bm.edges[active_index])
+    bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
     ok, message = _select_loop_via_builtin(context, obj, ELEMENT_EDGE)
     if not ok:
+        bm_restore = bmesh.from_edit_mesh(mesh)
+        ensure_lookup_tables(bm_restore, ELEMENT_EDGE)
+        for edge in bm_restore.edges:
+            edge.select = edge.index in original_selection
+        bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
         return set(), message
-    bm = bmesh.from_edit_mesh(obj.data)
-    ensure_lookup_tables(bm, ELEMENT_EDGE)
-    loop_edges = {edge for edge in bm.edges if edge.select}
+    bm_after = bmesh.from_edit_mesh(mesh)
+    ensure_lookup_tables(bm_after, ELEMENT_EDGE)
+    loop_edges = {edge for edge in bm_after.edges if edge.select}
+    loop_indices = {edge.index for edge in loop_edges}
     if not loop_edges:
+        for edge in bm_after.edges:
+            edge.select = edge.index in original_selection
+        bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
         msg = bi("Unable to resolve an edge loop", "无法生成边循环")
         return set(), msg
-
-    for edge in bm.edges:
-        edge.select = edge in loop_edges
+    if not original_selection.issubset(loop_indices):
+        for edge in bm_after.edges:
+            edge.select = edge.index in original_selection
+        bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
+        msg = bi("Selected edges are not on the same loop", "所选边不在同一个循环上")
+        return set(), msg
     log_debug_from_settings(settings, f"collect_edge_loop_edges gathered {len(loop_edges)} edges")
     return loop_edges, None
 
@@ -1509,20 +1691,57 @@ def collect_vertex_loop_vertices(context, obj, bm, settings):
     ensure_lookup_tables(bm, ELEMENT_VERTEX)
     bm.edges.ensure_lookup_table()
     selected_vertices = [vert for vert in bm.verts if vert.select]
-    if not selected_vertices:
-        msg = bi("Select at least one vertex to derive a loop", "请选择至少一个点以确定循环")
+    if len(selected_vertices) < 2:
+        msg = bi("Select at least two vertices to derive a loop", "请选择至少两个顶点以推导循环")
         return set(), msg
-    ok, message = _select_loop_via_builtin(context, obj, ELEMENT_VERTEX)
-    if not ok:
-        return set(), message
-    bm = bmesh.from_edit_mesh(obj.data)
-    ensure_lookup_tables(bm, ELEMENT_VERTEX)
-    loop_verts = {vert for vert in bm.verts if vert.select}
-    if not loop_verts:
-        msg = bi("Unable to compute a vertex loop", "无法生成点循环")
-        return set(), msg
-    log_debug_from_settings(settings, f"collect_vertex_loop_vertices gathered {len(loop_verts)} vertices")
-    return loop_verts, None
+    mesh = obj.data
+    target_indices = [vert.index for vert in selected_vertices]
+    required = set(target_indices)
+    original_selection = {vert.index for vert in bm.verts if vert.select}
+    best_loop_indices = None
+    last_message = None
+    for candidate_index in target_indices:
+        bm_candidate = bmesh.from_edit_mesh(mesh)
+        ensure_lookup_tables(bm_candidate, ELEMENT_VERTEX)
+        for vert in bm_candidate.verts:
+            vert.select = False
+        bm_candidate.select_history.clear()
+        candidate = bm_candidate.verts[candidate_index]
+        candidate.select = True
+        bm_candidate.select_history.add(candidate)
+        bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
+        ok, message = _select_loop_via_builtin(context, obj, ELEMENT_VERTEX)
+        if not ok:
+            last_message = message
+            continue
+        bm_after = bmesh.from_edit_mesh(mesh)
+        ensure_lookup_tables(bm_after, ELEMENT_VERTEX)
+        loop_indices = {vert.index for vert in bm_after.verts if vert.select}
+        if required.issubset(loop_indices):
+            best_loop_indices = loop_indices
+            break
+        last_message = bi(
+            "Unable to derive a loop passing through the selected vertices",
+            "无法找到同时经过所选顶点的循环",
+        )
+    if best_loop_indices is None:
+        bm_restore = bmesh.from_edit_mesh(mesh)
+        ensure_lookup_tables(bm_restore, ELEMENT_VERTEX)
+        for vert in bm_restore.verts:
+            vert.select = vert.index in original_selection
+        bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
+        return set(), last_message or bi(
+            "Unable to derive a loop passing through the selected vertices",
+            "无法找到同时经过所选顶点的循环",
+        )
+    bm_final = bmesh.from_edit_mesh(mesh)
+    ensure_lookup_tables(bm_final, ELEMENT_VERTEX)
+    loop_vertices = {bm_final.verts[index] for index in best_loop_indices}
+    for vert in bm_final.verts:
+        vert.select = vert.index in best_loop_indices
+    bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
+    log_debug_from_settings(settings, f"collect_vertex_loop_vertices gathered {len(loop_vertices)} vertices")
+    return loop_vertices, None
 
 
 class MeshAnnotationLayer(bpy.types.PropertyGroup):
@@ -1576,6 +1795,16 @@ class MeshAnnotationSettings(bpy.types.PropertyGroup):
         default=0.0,
         step=0.01,
         precision=3,
+        update=lambda self, context: tag_view3d_redraw(context),
+    )
+    overlay_face_offset: bpy.props.FloatProperty(
+        name="Face Offset",
+        description="Offset face overlays along the surface normal to avoid z-fighting",
+        min=0.0,
+        max=0.01,
+        default=0.002,
+        step=0.0001,
+        precision=4,
         update=lambda self, context: tag_view3d_redraw(context),
     )
 
@@ -1743,6 +1972,7 @@ class MESH_OT_annotation_layer_move(bpy.types.Operator):
             return {"CANCELLED"}
         collection.move(idx, new_idx)
         set_active_index(settings, self.element_type, new_idx)
+        apply_layer_order_to_mapping(obj, self.element_type)
         tag_view3d_redraw(context)
         return {"FINISHED"}
 
@@ -2020,6 +2250,63 @@ class MESH_OT_annotation_assign_layer(bpy.types.Operator):
         tag_view3d_redraw(context)
         return {"FINISHED"}
 
+
+class MESH_OT_annotation_mark_seam_active(bpy.types.Operator):
+    bl_idname = "mesh.annotation_mark_seam_active_face_layer"
+    bl_label = bi("Mark Active Layer Seams", "当前层缝合边")
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.object
+        if not obj or obj.type != "MESH" or context.mode != "EDIT_MESH":
+            return False
+        settings = getattr(obj, "mesh_annotations", None)
+        if not settings:
+            return False
+        layer = active_layer(settings, ELEMENT_FACE)
+        return layer is not None
+
+    def execute(self, context):
+        obj = context.object
+        settings = obj.mesh_annotations
+        layer = active_layer(settings, ELEMENT_FACE)
+        count = mark_face_layer_edges_as_seam(obj, [layer.layer_id])
+        if count == 0:
+            self.report({"INFO"}, bi("No seams updated", "未更新缝合边"))
+        else:
+            self.report({"INFO"}, bi(f"Marked {count} edges", f"已标记 {count} 条边"))
+        tag_view3d_redraw(context)
+        return {"FINISHED"}
+
+
+class MESH_OT_annotation_mark_seam_all(bpy.types.Operator):
+    bl_idname = "mesh.annotation_mark_seam_all_face_layers"
+    bl_label = bi("Mark All Layer Seams", "全部层缝合边")
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.object
+        if not obj or obj.type != "MESH" or context.mode != "EDIT_MESH":
+            return False
+        settings = getattr(obj, "mesh_annotations", None)
+        if not settings:
+            return False
+        return len(settings.face_layers) > 0
+
+    def execute(self, context):
+        obj = context.object
+        settings = obj.mesh_annotations
+        layer_ids = [layer.layer_id for layer in settings.face_layers]
+        count = mark_face_layer_edges_as_seam(obj, layer_ids)
+        if count == 0:
+            self.report({"INFO"}, bi("No seams updated", "未更新缝合边"))
+        else:
+            self.report({"INFO"}, bi(f"Marked {count} edges", f"已标记 {count} 条边"))
+        tag_view3d_redraw(context)
+        return {"FINISHED"}
+
 class MESH_OT_annotation_clear_selected(bpy.types.Operator):
     bl_idname = "mesh.annotation_clear_selected"
     bl_label = bi("Clear Annotation From Selected", "清除选中元素的标注")
@@ -2087,6 +2374,7 @@ class VIEW3D_PT_mesh_annotation(bpy.types.Panel):
         layout.prop(settings, "enable_overlay", text=bi("Show Overlay", "显示叠加"))
         layout.prop(settings, "overlay_line_width", text=bi("Edge Thickness", "线条粗细"))
         layout.prop(settings, "overlay_edge_trim", text=bi("Edge Shortening", "线条截断"))
+        layout.prop(settings, "overlay_face_offset", text=bi("Face Offset", "面偏移"))
         layout.prop(settings, "overlay_point_size", text=bi("Vertex Size", "点大小"))
         layout.prop(settings, "overlay_alpha_multiplier", text=bi("Overlay Opacity", "整体透明度"))
         layout.prop(settings, "overlay_show_backfaces", text=bi("Show Through Mesh", "背面可见"))
@@ -2170,6 +2458,18 @@ class VIEW3D_PT_mesh_annotation(bpy.types.Panel):
             new_loop.element_type = element_type
             new_loop.use_loop = True
             new_loop.skip_dialog = True
+            if element_type == ELEMENT_FACE:
+                seam_row = box.row(align=True)
+                seam_row.operator(
+                    "mesh.annotation_mark_seam_active_face_layer",
+                    text=bi("Mark Seams (Layer)", "当前层缝合"),
+                    icon="MOD_UVPROJECT",
+                )
+                seam_row.operator(
+                    "mesh.annotation_mark_seam_all_face_layers",
+                    text=bi("Mark Seams (All)", "全部层缝合"),
+                    icon="MOD_UVPROJECT",
+                )
             clear_op = box.operator(
                 "mesh.annotation_clear_selected",
                 text=bi("Clear Selected", "清除选中"),
@@ -2208,6 +2508,8 @@ classes = (
     MESH_OT_annotation_assign_loop,
     MESH_OT_annotation_assign_new_layer,
     MESH_OT_annotation_assign_layer,
+    MESH_OT_annotation_mark_seam_active,
+    MESH_OT_annotation_mark_seam_all,
     MESH_OT_annotation_clear_selected,
     VIEW3D_MT_mesh_annotation_type_assign_selected_active,
     VIEW3D_MT_mesh_annotation_type_assign_selected_new,
