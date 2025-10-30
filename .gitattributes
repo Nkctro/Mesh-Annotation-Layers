@@ -27,11 +27,9 @@ CONTRIBUTING.md linguist-documentation
 EXAMPLES.md linguist-documentation
 FAQ.md linguist-documentation
 INSTALL.md linguist-documentation
-PROJECT_SUMMARY.md linguist-documentation
 QUICK_REFERENCE.md linguist-documentation
 README.md linguist-documentation
 SECURITY.md linguist-documentation
-TESTING_CHECKLIST.md linguist-documentation
 
 # Mark package script as vendored (not main code)
 package.py linguist-vendored

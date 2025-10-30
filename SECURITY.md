@@ -2,20 +2,31 @@
 
 ## Supported Versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
-
 | Version | Supported          |
 | ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+| 1.0.x   | :white_check_mark: |
 
 ## Reporting a Vulnerability
 
-Use this section to tell people how to report a vulnerability.
+If you discover a security vulnerability in the Mesh Annotation Layers addon, please report it by:
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+1. **Creating a GitHub Security Advisory** (preferred): Go to the Security tab → Advisories → New Draft
+2. **Email**: Contact the repository maintainer directly through GitHub
+
+### What to Include
+
+- Description of the vulnerability
+- Steps to reproduce
+- Potential impact
+- Suggested fix (if any)
+
+### Response Timeline
+
+- We will acknowledge receipt within 48 hours
+- We will provide an initial assessment within 1 week
+- We will work on a fix and release a patch as soon as possible
+
+### Disclosure Policy
+
+- Please allow us reasonable time to fix the vulnerability before public disclosure
+- We will credit you in the fix announcement unless you prefer to remain anonymous

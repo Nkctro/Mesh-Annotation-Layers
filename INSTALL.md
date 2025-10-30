@@ -1,31 +1,41 @@
 # Installation Guide
 
-## Method 1: Install from Blender Preferences (Recommended)
+## Method 1: Install from ZIP (Recommended)
 
-1. Download or clone this repository
+1. Create a distribution ZIP file:
+   ```bash
+   python3 package.py
+   ```
+   This creates a file like `dist/mesh_annotation_layers_v1.0.0_YYYYMMDD.zip`
+
 2. Open Blender (version 3.0 or higher)
 3. Go to `Edit` > `Preferences` > `Add-ons`
 4. Click the `Install...` button
-5. Navigate to the `mesh_annotation_layers` folder and select the `__init__.py` file
+5. Navigate to the `dist` folder and select the ZIP file
 6. Click `Install Add-on`
 7. Enable the addon by checking the checkbox next to "Mesh: Mesh Annotation Layers"
 
-## Method 2: Manual Installation
+## Method 2: Manual Installation from Repository
 
-1. Locate your Blender addons directory:
+1. Clone or download this repository:
+   ```bash
+   git clone https://github.com/Nkctro/Mesh-Annotation-Layers.git
+   ```
+
+2. Locate your Blender addons directory:
    - **Windows**: `%APPDATA%\Blender Foundation\Blender\<version>\scripts\addons\`
    - **macOS**: `/Users/$USER/Library/Application Support/Blender/<version>/scripts/addons/`
    - **Linux**: `~/.config/blender/<version>/scripts/addons/`
 
-2. Copy the entire `mesh_annotation_layers` folder to the addons directory
+3. Copy the entire `mesh_annotation_layers` folder from the repository to the addons directory
 
-3. Restart Blender or refresh the addons list
+4. Restart Blender or refresh the addons list
 
-4. Go to `Edit` > `Preferences` > `Add-ons`
+5. Go to `Edit` > `Preferences` > `Add-ons`
 
-5. Search for "Mesh Annotation Layers"
+6. Search for "Mesh Annotation Layers"
 
-6. Enable the addon by checking the checkbox
+7. Enable the addon by checking the checkbox
 
 ## Verifying Installation
 
