@@ -19,11 +19,6 @@ license = [
 # Website and documentation
 website = "https://github.com/Nkctro/Mesh-Annotation-Layers"
 
-# Optional but recommended fields
-[permissions]
-files = "Addon stores annotation layer data in mesh custom attributes"
-network = "This addon does not require network access"
-
 # Tags help users find the extension
 tags = [
   "Mesh",
@@ -33,6 +28,11 @@ tags = [
   "Topology",
   "Workflow",
 ]
+
+# Optional but recommended fields
+[permissions]
+files = "Addon stores annotation layer data in mesh custom attributes"
+network = "This addon does not require network access"
 
 # Wheels (if any Python dependencies are needed - currently none)
 # wheels = []
