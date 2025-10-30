@@ -1,0 +1,35 @@
+# Auto detect text files and normalize line endings to LF
+* text=auto
+
+# Explicitly declare text files
+*.py text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.sh text eol=lf
+
+# Denote binary files
+*.blend binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.zip binary
+
+# Language statistics - mark documentation as documentation
+*.md linguist-documentation
+ARCHITECTURE.md linguist-documentation
+CHANGELOG.md linguist-documentation
+CONTRIBUTING.md linguist-documentation
+EXAMPLES.md linguist-documentation
+FAQ.md linguist-documentation
+INSTALL.md linguist-documentation
+QUICK_REFERENCE.md linguist-documentation
+README.md linguist-documentation
+SECURITY.md linguist-documentation
+
+# Mark package script as vendored (not main code)
+package.py linguist-vendored
