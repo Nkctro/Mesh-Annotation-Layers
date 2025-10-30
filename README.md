@@ -1,6 +1,6 @@
 # Mesh Annotation Layers
 
-[English](#english) | [中文](#中文)
+[English](#english) | [Chinese (中文)](#chinese-中文)
 
 ---
 
@@ -12,13 +12,14 @@
 
 ### Features
 
-- ✨ **Multiple Annotation Layers**: Create unlimited annotation layers for organizing your mesh
-- 🎨 **Custom Colors**: Each layer can have its own color with adjustable opacity
-- 📐 **Element Support**: Annotate vertices, edges, or faces independently
-- 👁️ **Layer Visibility**: Toggle layer visibility on/off
-- 🔄 **Non-Destructive**: Annotations don't modify mesh data, materials, or vertex colors
-- 🎯 **Selection Tools**: Select all elements in a layer with one click
-- 💾 **Persistent**: Annotations are saved with your Blender file
+- **Multiple annotation layers** for vertices, edges, and faces with per-object storage
+- **Flexible assignments** including assign selected, assign loop, and one-click create-new-layer workflows
+- **Custom overlay styling** with per-layer colors plus controls for opacity, line width, vertex size, face offset, edge trimming, and backface visibility
+- **Selection utilities** to pick from selection, select layer elements, or clear/remove assignments quickly
+- **Viewport context menu tools** for seam marking and faster access to layer actions
+- **Bilingual interface** that can follow Blender, force English, force Chinese, or show both labels
+- **Non-destructive workflow** that leaves geometry, materials, and vertex colors untouched
+- **Persistent data** saved inside the .blend file alongside your meshes
 
 ### Installation
 
@@ -66,12 +67,13 @@ This will create a ZIP file in the `dist/` folder that can be installed directly
 
 #### Assigning Elements to Layers
 
-1. Select the mesh elements (vertices, edges, or faces) you want to annotate
-2. Click one of the assignment buttons:
-   - **Vertices**: Assign selected vertices
-   - **Edges**: Assign selected edges
-   - **Faces**: Assign selected faces
-3. The selected elements will be overlaid with the layer's color
+1. Select the mesh elements (vertices, edges, or faces) you want to annotate.
+2. Use the assignment controls:
+   - **Assign Selected**: Add the current selection to the active layer.
+   - **Assign Loop**: Capture the detected edge or face loop and add it to the active layer.
+   - **Selected -> New Layer**: Create a new layer and move the current selection there in one step.
+   - **Loop -> New Layer**: Create a new layer directly from the detected loop.
+3. The selected elements or loop will be overlaid with the layer's color.
 
 #### Managing Layers
 
@@ -79,13 +81,30 @@ This will create a ZIP file in the `dist/` folder that can be installed directly
 - **Remove Layer**: Select a layer and click the **-** button
 - **Toggle Visibility**: Click the eye icon next to a layer
 - **Change Color**: Click the color swatch to open the color picker
-- **Adjust Opacity**: Use the "Opacity" slider at the bottom of the panel
+- **Pick From Selection**: Use the eyedropper button to activate the layer that matches the current selection
+- **Mark Seams**: In face mode, convert the active or all face layers into UV seams with the seam buttons
 
 #### Selection Tools
 
-- **Select Layer Elements**: Select all elements currently assigned to the active layer
-- **Remove Selected**: Remove selected elements from the active layer
-- **Clear Layer**: Remove all elements from the active layer
+- **Select Layer Elements**: Highlight every element currently assigned to the active layer
+- **Remove Selected**: Remove only the selected elements from the active layer
+- **Clear Selected**: Clear the entire active layer in one click
+
+#### Overlay Controls
+
+- **Show Overlay** toggles annotations on or off globally
+- **Edge Thickness** controls overlay line width
+- **Edge Shortening** trims overlay lines closer to the middle of an edge
+- **Face Offset** lifts face overlays away from the surface to reduce z-fighting
+- **Vertex Size** adjusts the size of vertex markers
+- **Overlay Opacity** sets a global transparency multiplier
+- **Show Through Mesh** decides whether overlays appear on backfaces
+
+#### Add-on Preferences
+
+Open `Edit > Preferences > Add-ons > Mesh Annotation Layers` to configure:
+- **Language** mode (Auto, English, Chinese (中文), or Both) for interface labels
+- **Type Selection Submenu** to choose between a compact or split context menu layout
 
 ### Use Cases
 
@@ -130,7 +149,7 @@ This addon is released under the GPL-3.0 license.
 
 ---
 
-## 中文
+## Chinese (中文)
 
 ### 概述
 
@@ -138,13 +157,14 @@ This addon is released under the GPL-3.0 license.
 
 ### 功能特性
 
-- ✨ **多个标注层**：创建无限的标注层来组织你的网格
-- 🎨 **自定义颜色**：每个层可以有自己的颜色和可调节的透明度
-- 📐 **元素支持**：独立标注顶点、边或面
-- 👁️ **图层可见性**：开关图层的显示/隐藏
-- 🔄 **非破坏性**：标注不会修改网格数据、材质或顶点颜色
-- 🎯 **选择工具**：一键选择图层中的所有元素
-- 💾 **持久化**：标注会随 Blender 文件一起保存
+- **多图层标注**：针对顶点、边、面创建任意数量的图层，每个物体独立存储
+- **灵活分配**：支持“分配选中”、“分配循环”以及一键新建图层并完成分配
+- **叠加样式自定义**：提供颜色、透明度、线宽、点大小、面偏移、边截断、背面可见性等调节
+- **快速工具**：可根据选择激活图层、选中整图层元素或快速清理分配
+- **视图菜单集成**：在 3D 视图右键菜单操作，可一键将面图层转换为 UV 缝
+- **双语界面**：支持自动、仅英文、仅中文或双语标签
+- **非破坏流程**：不会修改几何体、材质或顶点颜色数据
+- **持久化数据**：标注内容随 .blend 文件一并保存
 
 ### 安装方法
 
@@ -192,12 +212,13 @@ python3 package.py
 
 #### 将元素分配给图层
 
-1. 选择要标注的网格元素（顶点、边或面）
-2. 点击分配按钮之一：
-   - **Vertices（顶点）**：分配选中的顶点
-   - **Edges（边）**：分配选中的边
-   - **Faces（面）**：分配选中的面
-3. 选中的元素将以图层的颜色覆盖显示
+1. 选择要标注的网格元素（顶点、边或面），确保处于编辑模式。
+2. 使用分配控制：
+   - **分配选中**：将当前选区添加到活动图层。
+   - **分配循环**：检测边/面循环，并添加到活动图层。
+   - **选中 -> 新图层**：一键新建图层，并将当前选区移入其中。
+   - **循环 -> 新图层**：根据检测的循环直接创建新图层。
+3. 选中或循环将用图层的颜色进行叠加显示。
 
 #### 管理图层
 
@@ -205,13 +226,30 @@ python3 package.py
 - **删除图层**：选择一个图层并点击 **-** 按钮
 - **切换可见性**：点击图层旁边的眼睛图标
 - **更改颜色**：点击色块打开颜色选择器
-- **调整透明度**：使用面板底部的"Opacity（不透明度）"滑块
+- **根据选择激活图层**：使用吸管 “Pick From Selection” 按钮激活匹配当前选区的图层
+- **标记接缝**：在面模式下，使用 UV 接缝按钮将当前或全部面图层转换为 UV 缝
 
 #### 选择工具
 
-- **Select Layer Elements（选择图层元素）**：选择当前分配给活动图层的所有元素
-- **Remove Selected（移除选中）**：从活动图层中移除选中的元素
-- **Clear Layer（清空图层）**：从活动图层中移除所有元素
+- **Select Layer Elements（选择图层元素）**：高亮显示活动图层中的所有元素
+- **Remove Selected（移除选中）**：仅移除选区内的元素
+- **Clear Selected（清除选中）**：一键清理活动图层的所有分配
+
+#### 叠加显示调整
+
+- **显示覆盖层**：总开关用于全局显示/隐藏标注
+- **线条粗细**：调整边线的阈值
+- **线条截断**：使线条更接近边的中点
+- **面偏移**：顺着表面法线提升叠加
+- **点大小**：控制顶点标识的大小
+- **覆盖透明度**：设置全局透明度倍率
+- **背面可见**：控制是否在背面显示标注
+
+#### 插件偏好设置
+
+在 `Edit > Preferences > Add-ons > Mesh Annotation Layers` 中可设置：
+- **语言**：自动、仅英文、仅中文或双语标签
+- **类型子菜单**：控制是否在右键菜单中拆分元素类型
 
 ### 使用场景
 

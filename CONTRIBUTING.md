@@ -257,7 +257,7 @@ Closes #42
 
 ```markdown
 **Blender Version:** 3.6.0
-**Addon Version:** 1.0.0
+**Addon Version:** 1.1.1
 **Operating System:** Windows 10
 
 **Description:**

@@ -6,7 +6,7 @@
    ```bash
    python3 package.py
    ```
-   This creates a file like `dist/mesh_annotation_layers_v1.0.0_YYYYMMDD.zip`
+   This creates a file like `dist/mesh_annotation_layers_v1.1.1_YYYYMMDD.zip`
 
 2. Open Blender (version 3.0 or higher)
 3. Go to `Edit` > `Preferences` > `Add-ons`

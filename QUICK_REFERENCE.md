@@ -2,11 +2,11 @@
 
 ## Quick Start
 
-1. **Enter Edit Mode**: Select mesh → Press `Tab`
-2. **Open Panel**: Press `N` → Click "Annotation" tab
+1. **Enter Edit Mode**: Select mesh -> Press `Tab`
+2. **Open Panel**: Press `N` -> Click "Annotation" tab
 3. **Add Layer**: Click `+` button
 4. **Select Elements**: Select vertices/edges/faces
-5. **Assign**: Click "Vertices", "Edges", or "Faces" button
+5. **Assign**: Click "Assign Selected" to add the selection to the active layer
 
 ## Common Workflows
 
@@ -16,7 +16,7 @@
 1. Add a new layer (click +)
 2. Rename it to "Region 1"
 3. Select faces in the first region
-4. Click "Faces" to assign
+4. Click "Assign Selected" to assign the faces
 5. Repeat for other regions with different layers
 ```
 
@@ -26,7 +26,7 @@
 1. Add layer named "Main Flow"
 2. Change color to blue
 3. Select edge loops for main flow
-4. Click "Edges" to assign
+4. Click "Assign Loop" to capture the loop
 5. Add layer "Secondary Flow" with different color
 6. Assign secondary edge loops
 ```
@@ -37,7 +37,7 @@
 1. Add layer "Needs Fixing"
 2. Change color to red
 3. Select problematic faces/vertices
-4. Click appropriate assignment button
+4. Click "Assign Selected" to store the elements
 5. Later: Click "Select Layer Elements" to quickly find them
 ```
 
@@ -47,9 +47,9 @@ All operations can be done with mouse clicks only:
 - Add/Remove layers: Click `+` or `-` buttons
 - Select layer: Click on layer name in list
 - Rename: Click on name, type, press Enter
-- Change color: Click color box → Pick color
+- Change color: Click color box -> Pick color
 - Toggle visibility: Click eye icon
-- Adjust opacity: Drag slider
+- Adjust overlay: Use the overlay controls for thickness, opacity, and offsets
 
 ## Tips & Tricks
 
@@ -75,38 +75,56 @@ Good naming examples:
 
 1. **Create template layers**: Set up common layers at the start
 2. **Use visibility toggle**: Hide layers you're not working on
-3. **Opacity adjustment**: Lower opacity to see mesh underneath
+3. **Overlay controls**: Tune opacity, line width, and offsets to keep the mesh readable
 4. **Selection workflow**: Use "Select Layer Elements" to quickly work on specific areas
-5. **Clear and reuse**: Use "Clear Layer" to reuse a layer for different elements
+5. **Clear and reuse**: Use "Clear Selected" to wipe a layer before repurposing it
 
 ## Common Operations
 
 ### Add a Layer
-Click `+` → Layer appears with random color
+Click `+` -> Layer appears with random color
 
 ### Remove a Layer
-Select layer → Click `-` → Layer and all data removed
+Select layer -> Click `-` -> Layer and all data removed
 
 ### Rename a Layer
-Click on layer name → Type new name → Press Enter
+Click on layer name -> Type new name -> Press Enter
 
 ### Change Layer Color
-Click color box → Pick color → Close picker
+Click color box -> Pick color -> Close picker
 
 ### Hide/Show Layer
 Click eye icon next to layer name
 
-### Assign Selection to Layer
-Select elements → Click "Vertices", "Edges", or "Faces"
+### Assign Selection to Active Layer
+Select elements -> Click "Assign Selected"
+
+### Assign Loop to Active Layer
+Select a loop seed -> Click "Assign Loop"
+
+### Create New Layer from Selection
+Select elements -> Click "Selected -> New Layer"
+
+### Create New Layer from Loop
+Select loop seed -> Click "Loop -> New Layer"
 
 ### Remove Selection from Layer
-Select elements → Click corresponding "Remove Selected" button
+Select elements -> Click "Remove Selected"
 
 ### Select All Layer Elements
-Make layer active → Click "Select Layer Elements"
+Make layer active -> Click "Select Layer Elements"
 
-### Clear All Layer Data
-Make layer active → Click "Clear Layer"
+### Clear Layer Assignments
+Make layer active -> Click "Clear Selected"
+
+### Pick Layer from Selection
+Select elements that already belong to a layer -> Click "Pick From Selection"
+
+### Mark Layer Seams
+In face mode -> Use "Mark Seams (Layer)" or "Mark Seams (All)" to convert assignments to UV seams
+
+### Adjust Overlay Display
+Use the overlay controls to tweak thickness, offsets, point size, opacity, and backface visibility
 
 ## Limitations
 
