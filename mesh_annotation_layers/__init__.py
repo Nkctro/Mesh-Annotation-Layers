@@ -6,6 +6,8 @@ bl_info = {
     "location": "3D Viewport > Sidebar > Mesh Annotation",
     "description": "Annotate selected mesh elements with named color layers without altering materials",
     "category": "3D View",
+    "doc_url": "https://github.com/Nkctro/Mesh-Annotation-Layers",
+    "tracker_url": "https://github.com/Nkctro/Mesh-Annotation-Layers/issues",
 }
 
 import bpy
