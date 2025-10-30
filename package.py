@@ -60,6 +60,7 @@ def create_addon_zip():
         "FAQ.md",
         "CONTRIBUTING.md",
         "ARCHITECTURE.md",
+        "SECURITY.md",
     ]
     
     # Create ZIP file
