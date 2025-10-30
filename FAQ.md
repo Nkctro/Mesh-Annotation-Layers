@@ -11,6 +11,9 @@
 ### Q: Which Blender versions are supported?
 **A:** Blender 3.0 and above. It may work on earlier versions but is not officially tested or supported.
 
+### Q: Can I change the add-on's language?
+**A:** Yes. Go to Edit > Preferences > Add-ons > Mesh Annotation Layers and switch the Language option to Auto, English, Chinese, or Both.
+
 ### Q: Does it work with Blender 4.0+?
 **A:** Yes, the addon is designed to be compatible with Blender 4.0 and future versions.
 
@@ -50,6 +53,18 @@
 - You're in Edit Mode
 - Opacity is not set to 0
 - The layer actually has elements assigned to it
+
+### Q: How do I change the overlay thickness or transparency?
+**A:** Use the overlay controls in the panel to adjust edge thickness, edge shortening, face offset, vertex size, opacity, and whether overlays show on backfaces.
+
+### Q: Can I activate the right layer based on my current selection?
+**A:** Click "Pick From Selection" to activate the layer that already contains the selected elements.
+
+### Q: What's the quickest way to create a new layer from my selection?
+**A:** Use "Selected -> New Layer" for arbitrary selections or "Loop -> New Layer" when you need the detected loop in its own layer.
+
+### Q: Can I turn face layers into UV seams?
+**A:** In face mode, use "Mark Seams (Layer)" for the active layer or "Mark Seams (All)" to convert every face layer.
 
 ### Q: Can I mix vertices, edges, and faces in the same layer?
 **A:** No, each layer stores only one type of element. You can assign vertices, edges, OR faces to a layer, but not mix them. Create separate layers for different element types.
