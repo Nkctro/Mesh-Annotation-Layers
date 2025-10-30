@@ -1687,6 +1687,57 @@ def collect_edge_loop_edges(context, obj, bm, settings):
     return loop_edges, None
 
 
+def _gather_vertex_path_components(bm, vertex_indices):
+    components = []
+    visited = set()
+    for index in vertex_indices:
+        if index in visited:
+            continue
+        component = set()
+        stack = [index]
+        while stack:
+            current = stack.pop()
+            if current in visited:
+                continue
+            visited.add(current)
+            component.add(current)
+            vert = bm.verts[current]
+            for edge in vert.link_edges:
+                for other in edge.verts:
+                    other_index = other.index
+                    if other_index == current or other_index not in vertex_indices:
+                        continue
+                    stack.append(other_index)
+        if component:
+            components.append(component)
+    return components
+
+
+def _component_is_vertex_path(bm, component):
+    if not component:
+        return False
+    if len(component) == 1:
+        return True
+    endpoints = 0
+    for index in component:
+        vert = bm.verts[index]
+        neighbours = {
+            other.index
+            for edge in vert.link_edges
+            for other in edge.verts
+            if other.index != index and other.index in component
+        }
+        degree = len(neighbours)
+        if degree > 2:
+            return False
+        if degree == 1:
+            endpoints += 1
+        elif degree == 0:
+            return False
+    return endpoints in {0, 2}
+
+
+
 def collect_vertex_loop_vertices(context, obj, bm, settings):
     ensure_lookup_tables(bm, ELEMENT_VERTEX)
     bm.edges.ensure_lookup_table()
@@ -1698,7 +1749,7 @@ def collect_vertex_loop_vertices(context, obj, bm, settings):
     target_indices = [vert.index for vert in selected_vertices]
     required = set(target_indices)
     original_selection = {vert.index for vert in bm.verts if vert.select}
-    best_loop_indices = None
+    chosen_loop = None
     last_message = None
     for candidate_index in target_indices:
         bm_candidate = bmesh.from_edit_mesh(mesh)
@@ -1717,32 +1768,41 @@ def collect_vertex_loop_vertices(context, obj, bm, settings):
         bm_after = bmesh.from_edit_mesh(mesh)
         ensure_lookup_tables(bm_after, ELEMENT_VERTEX)
         loop_indices = {vert.index for vert in bm_after.verts if vert.select}
-        if required.issubset(loop_indices):
-            best_loop_indices = loop_indices
-            break
-        last_message = bi(
-            "Unable to derive a loop passing through the selected vertices",
-            "无法找到同时经过所选顶点的循环",
-        )
-    if best_loop_indices is None:
+        components = _gather_vertex_path_components(bm_after, loop_indices)
+        valid_components = [comp for comp in components if _component_is_vertex_path(bm_after, comp)]
+        containing = [comp for comp in valid_components if required.issubset(comp)]
+        if not containing:
+            last_message = bi(
+                "No vertex loop passes through every selected vertex",
+                "没有一条顶点循环能够覆盖所有已选顶点",
+            )
+            continue
+        if len(containing) > 1:
+            last_message = bi(
+                "Multiple vertex loops detected; refine your selection",
+                "检测到多条顶点循环，请精细调整选区",
+            )
+            continue
+        chosen_loop = set(containing[0])
+        break
+    if chosen_loop is None:
         bm_restore = bmesh.from_edit_mesh(mesh)
         ensure_lookup_tables(bm_restore, ELEMENT_VERTEX)
         for vert in bm_restore.verts:
             vert.select = vert.index in original_selection
         bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
         return set(), last_message or bi(
-            "Unable to derive a loop passing through the selected vertices",
-            "无法找到同时经过所选顶点的循环",
+            "No vertex loop passes through every selected vertex",
+            "没有一条顶点循环能够覆盖所有已选顶点",
         )
     bm_final = bmesh.from_edit_mesh(mesh)
     ensure_lookup_tables(bm_final, ELEMENT_VERTEX)
-    loop_vertices = {bm_final.verts[index] for index in best_loop_indices}
+    loop_vertices = {bm_final.verts[index] for index in chosen_loop}
     for vert in bm_final.verts:
-        vert.select = vert.index in best_loop_indices
+        vert.select = vert.index in chosen_loop
     bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
     log_debug_from_settings(settings, f"collect_vertex_loop_vertices gathered {len(loop_vertices)} vertices")
     return loop_vertices, None
-
 
 class MeshAnnotationLayer(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty(name="Name", default="Layer")
