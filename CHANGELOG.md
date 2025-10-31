@@ -2,6 +2,12 @@
 
 All notable changes to the Mesh Annotation Layers addon will be documented in this file.
 
+# [1.1.2] - 2025-10-31
+
+### Changed
+- Bumped extension version to 1.1.2 for refreshed package build on Blender 4.2+.
+- Resolved annotation drift that occurred after complex topology edits by keeping layer mappings in sync with live bmesh data.
+
 ## [1.1.1] - 2025-10-30
 
 ### Added
@@ -11,13 +17,14 @@ All notable changes to the Mesh Annotation Layers addon will be documented in th
 - Context menu integration plus seam-marking tools that convert face layers to UV seams
 - "Pick From Selection" action to activate the matching layer based on the current mesh selection
 - **blender_manifest.toml** for Blender 4.2+ extension platform compliance
-- Documentation and tracker URLs in bl_info metadata
+- Documentation and tracker URLs recorded in the extension manifest metadata
 
 ### Changed
 - Annotation sidebar reorganised so assignment tools and overlay controls are easier to find
 - Documentation refreshed in English and Chinese to cover the new workflow improvements
 - Package script now includes blender_manifest.toml in distribution ZIP
 - License identifier updated to SPDX format (GPL-3.0-or-later)
+- Raised minimum supported Blender version to 4.2 to match the Extensions platform requirements
 
 ## [1.0.0] - 2025-10-29
 

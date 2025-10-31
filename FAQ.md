@@ -9,13 +9,13 @@
 **A:** Yes, it's released under the GPL-3.0 license and is completely free to use.
 
 ### Q: Which Blender versions are supported?
-**A:** Blender 3.0 and above. It may work on earlier versions but is not officially tested or supported.
+**A:** Blender 4.2 and above. Earlier versions are not supported because the addon targets the Blender Extensions platform.
 
 ### Q: Can I change the add-on's language?
 **A:** Yes. Go to Edit > Preferences > Add-ons > Mesh Annotation Layers and switch the Language option to Auto, English, Chinese, or Both.
 
-### Q: Does it work with Blender 4.0+?
-**A:** Yes, the addon is designed to be compatible with Blender 4.0 and future versions.
+### Q: Does it work with Blender 4.2+?
+**A:** Yes, the addon is designed for Blender 4.2 and future releases in the 4.x line.
 
 ---
 
@@ -28,7 +28,7 @@
 **A:** Yes, you can zip the `mesh_annotation_layers` folder and install the ZIP through Blender's addon preferences.
 
 ### Q: The addon doesn't appear in my addon list, why?
-**A:** Make sure you installed the entire `mesh_annotation_layers` folder (or the ZIP), not just the `__init__.py` file alone. Also check you're using Blender 3.0+.
+**A:** Make sure you installed the entire `mesh_annotation_layers` folder (or the ZIP), not just the `__init__.py` file alone. Also check you're using Blender 4.2+.
 
 ---
 
@@ -159,7 +159,7 @@
 
 ### Q: I'm getting errors when enabling the addon
 **A:** Check:
-- You're using Blender 3.0 or higher
+- You're using Blender 4.2 or higher
 - You have Python installed correctly (comes with Blender)
 - Look at the Blender console for specific error messages
 - Try restarting Blender

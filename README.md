@@ -119,7 +119,7 @@ Open `Edit > Preferences > Add-ons > Mesh Annotation Layers` to configure:
 
 ### Technical Details
 
-- Compatible with Blender 3.0 and above
+- Compatible with Blender 4.2 and above
 - Works only in Edit Mode for mesh objects
 - Annotations are stored per object
 - Uses GPU shader drawing for efficient overlay rendering
@@ -264,7 +264,7 @@ python3 package.py
 
 ### 技术细节
 
-- 兼容 Blender 3.0 及以上版本
+- 兼容 Blender 4.2 及以上版本
 - 仅在网格对象的编辑模式下工作
 - 标注按对象存储
 - 使用 GPU 着色器绘制实现高效的叠加渲染

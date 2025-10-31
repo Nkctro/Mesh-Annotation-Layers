@@ -44,7 +44,7 @@ There are many ways to contribute:
 
 ### Prerequisites
 
-- Blender 3.0 or higher
+- Blender 4.2 or higher
 - Git for version control
 - Text editor or IDE (VS Code, PyCharm, etc.)
 - Basic Python knowledge
@@ -124,7 +124,7 @@ mesh_annotation_layers/
     __init__.py          # Main addon file
     
 Structure within __init__.py:
-1. bl_info dictionary
+1. Module constants and helpers (e.g. `ADDON_PACKAGE`)
 2. Imports
 3. Data Structures (PropertyGroups)
 4. Operators
@@ -132,6 +132,8 @@ Structure within __init__.py:
 6. Panels
 7. Draw handlers
 8. Registration
+
+> Extension metadata lives in `blender_manifest.toml`. Keep the manifest in sync with any changes to names, versions, tags, or permissions.
 ```
 
 ---
@@ -256,7 +258,7 @@ Closes #42
 ### Bug Report Template
 
 ```markdown
-**Blender Version:** 3.6.0
+**Blender Version:** 4.2.0
 **Addon Version:** 1.1.1
 **Operating System:** Windows 10
 

@@ -327,8 +327,8 @@ For each visible layer:
 
 ### Blender Version Support
 
-- **Minimum**: Blender 3.0
-- **Tested**: Blender 3.x, 4.x
+- **Minimum**: Blender 4.2
+- **Tested**: Blender 4.2
 - **Dependencies**: None (uses built-in modules)
 
 ### API Usage

@@ -2,18 +2,18 @@ schema_version = "1.0.0"
 
 # Required fields
 id = "mesh_annotation_layers"
-version = "1.1.1"
+version = "1.1.2"
 name = "Mesh Annotation Layers"
-tagline = "Annotate mesh elements with named color layers without altering materials"
+tagline = "Organize mesh selections into colored annotation layers"
 maintainer = "Nkctro <nkctro@users.noreply.github.com>"
 type = "add-on"
 
 # Blender version compatibility
-blender_version_min = "3.0.0"
+blender_version_min = "4.2.0"
 
 # License must be an SPDX identifier
 license = [
-  "GPL-3.0-or-later",
+  "SPDX:GPL-3.0-or-later",
 ]
 
 # Website and documentation
@@ -21,12 +21,10 @@ website = "https://github.com/Nkctro/Mesh-Annotation-Layers"
 
 # Tags help users find the extension
 tags = [
+  "3D View",
   "Mesh",
   "Modeling",
-  "3D View",
-  "Annotation",
-  "Topology",
-  "Workflow",
+  "User Interface",
 ]
 
 # Optional but recommended fields
