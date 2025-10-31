@@ -8,7 +8,7 @@
    ```
    This creates a file like `dist/mesh_annotation_layers_v1.1.1_YYYYMMDD.zip`
 
-2. Open Blender (version 3.0 or higher)
+2. Open Blender (version 4.2 or higher)
 3. Go to `Edit` > `Preferences` > `Add-ons`
 4. Click the `Install...` button
 5. Navigate to the `dist` folder and select the ZIP file
@@ -58,7 +58,7 @@
 - Check that the addon is enabled in Preferences
 
 **Errors when enabling:**
-- Check that you're using Blender 3.0 or higher
+- Check that you're using Blender 4.2 or higher
 - Look at the Blender console for error messages
 - Make sure all files in the addon folder are intact
 

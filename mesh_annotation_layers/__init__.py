@@ -1,15 +1,3 @@
-bl_info = {
-    "name": "Mesh Annotation Layers",
-    "author": "Nkctro",
-    "version": (1, 1, 1),
-    "blender": (3, 0, 0),
-    "location": "3D Viewport > Sidebar > Mesh Annotation",
-    "description": "Annotate selected mesh elements with named color layers without altering materials",
-    "category": "3D View",
-    "doc_url": "https://github.com/Nkctro/Mesh-Annotation-Layers",
-    "tracker_url": "https://github.com/Nkctro/Mesh-Annotation-Layers/issues",
-}
-
 import bpy
 import bmesh
 import colorsys
@@ -19,6 +7,9 @@ from collections import Counter, defaultdict
 from mathutils import Vector
 import gpu
 from gpu_extras.batch import batch_for_shader
+
+
+ADDON_PACKAGE = __package__ or __name__
 
 
 ELEMENT_FACE = "FACE"
@@ -85,7 +76,7 @@ def get_addon_prefs():
         return None
     if not prefs:
         return None
-    addon = prefs.addons.get(__name__)
+    addon = prefs.addons.get(ADDON_PACKAGE)
     if addon:
         return addon.preferences
     return None
@@ -122,7 +113,7 @@ def bi(en: str, zh: str) -> str:
 
 
 class MeshAnnotationPreferences(bpy.types.AddonPreferences):
-    bl_idname = __name__
+    bl_idname = ADDON_PACKAGE
 
     language_display: bpy.props.EnumProperty(
         name="Language",
@@ -358,9 +349,14 @@ def merge_stack_layer_into_mapping(mapping, bm, stack_layer, element_type: str):
     changed = False
     for elem in container:
         data = elem[stack_layer]
+        key = str(elem.index)
         layers = decode_layer_bytes(data)
         if layers:
-            mapping[str(elem.index)] = [int(v) for v in layers]
+            if mapping.get(key) != layers:
+                mapping[key] = layers
+                changed = True
+        elif key in mapping:
+            del mapping[key]
             changed = True
     return changed
 
@@ -513,9 +509,9 @@ def clear_elements_from_layer(obj: bpy.types.Object, element_type: str, layer_id
         valid_indices = {elem.index for elem in container}
         if prune_mapping_to_indices(mapping, valid_indices):
             save_element_layers(settings, element_type, mapping)
-        merge_stack_layer_into_mapping(mapping, bm, stack_layer, element_type)
+        mapping_changed = merge_stack_layer_into_mapping(mapping, bm, stack_layer, element_type)
         targets = container if not only_selected else [elem for elem in container if elem.select]
-        changed = False
+        assignment_changed = False
         for elem in targets:
             idx = elem.index
             layers = normalize_layer_ids(get_layers_for_index(mapping, idx), order_lookup)
@@ -523,28 +519,32 @@ def clear_elements_from_layer(obj: bpy.types.Object, element_type: str, layer_id
                 if mode == "TOP":
                     if layers:
                         layers = layers[:-1]
-                        changed = True
+                        assignment_changed = True
                 else:
                     if layers:
                         layers = []
-                        changed = True
+                        assignment_changed = True
             elif layer_id in layers:
                 new_layers = [l for l in layers if l != layer_id]
                 if new_layers != layers:
                     layers = new_layers
-                    changed = True
+                    assignment_changed = True
             if mode == "TOP" and layer_id != -1:
                 # remove first occurrence matching layer_id only once
                 if layer_id in layers:
                     layers.remove(layer_id)
-                    changed = True
+                    assignment_changed = True
             layers = normalize_layer_ids(layers, order_lookup)
             set_layers_for_index(mapping, idx, layers)
-        if changed:
+        if assignment_changed:
             sync_mapping_to_bmesh(bm, int_layer, stack_layer, mapping, element_type)
+        if mapping_changed or assignment_changed:
             save_element_layers(settings, element_type, mapping)
         bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
-        log_debug_from_settings(settings, f"Clear edit processed {len(targets)} elements (changed={changed})")
+        log_debug_from_settings(
+            settings,
+            f"Clear edit processed {len(targets)} elements (changed={assignment_changed or mapping_changed})",
+        )
         return
     bm = bmesh.new()
     bm.from_mesh(mesh)
@@ -554,8 +554,8 @@ def clear_elements_from_layer(obj: bpy.types.Object, element_type: str, layer_id
     valid_indices = {elem.index for elem in container}
     if prune_mapping_to_indices(mapping, valid_indices):
         save_element_layers(settings, element_type, mapping)
-    merge_stack_layer_into_mapping(mapping, bm, stack_layer, element_type)
-    changed = False
+    mapping_changed = merge_stack_layer_into_mapping(mapping, bm, stack_layer, element_type)
+    assignment_changed = False
     for elem in container:
         idx = elem.index
         layers = normalize_layer_ids(get_layers_for_index(mapping, idx), order_lookup)
@@ -563,36 +563,67 @@ def clear_elements_from_layer(obj: bpy.types.Object, element_type: str, layer_id
             if mode == "TOP":
                 if layers:
                     layers = layers[:-1]
-                    changed = True
+                    assignment_changed = True
             else:
                 if layers:
                     layers = []
-                    changed = True
+                    assignment_changed = True
         elif layer_id in layers:
             new_layers = [l for l in layers if l != layer_id]
             if new_layers != layers:
                 layers = new_layers
-                changed = True
+                assignment_changed = True
         if mode == "TOP" and layer_id != -1 and layer_id in layers:
             layers.remove(layer_id)
-            changed = True
+            assignment_changed = True
         layers = normalize_layer_ids(layers, order_lookup)
         set_layers_for_index(mapping, idx, layers)
-    if changed:
+    if assignment_changed:
         sync_mapping_to_bmesh(bm, int_layer, stack_layer, mapping, element_type)
         bm.to_mesh(mesh)
         mesh.update()
+    if mapping_changed or assignment_changed:
         save_element_layers(settings, element_type, mapping)
     bm.free()
-    log_debug_from_settings(settings, f"Clear object complete for layer {layer_id} (changed={changed})")
+    log_debug_from_settings(
+        settings,
+        f"Clear object complete for layer {layer_id} (changed={assignment_changed or mapping_changed})",
+    )
 
 
 def count_elements_for_layer(obj: bpy.types.Object, element_type: str, layer_id: int) -> int:
-    settings = getattr(obj, "mesh_annotations", None)
-    mapping = load_element_layers(settings, element_type)
-    sequence = get_mesh_sequence(obj, element_type)
-    valid = {elem.index for elem in sequence}
-    return sum(1 for key, layers in mapping.items() if int(key) in valid and layer_id in layers)
+    mesh = getattr(obj, "data", None)
+    if mesh is None or layer_id is None:
+        return 0
+    if obj.mode == "EDIT":
+        bm = bmesh.from_edit_mesh(mesh)
+        int_layer, stack_layer = ensure_annotation_layers(bm, element_type)
+        ensure_lookup_tables(bm, element_type)
+        container = element_container(bm, element_type)
+        count = 0
+        for elem in container:
+            layers = decode_layer_bytes(elem[stack_layer])
+            if not layers and elem[int_layer] >= 0:
+                layers = [int(elem[int_layer])]
+            if layer_id in layers:
+                count += 1
+        return count
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    try:
+        int_layer, stack_layer = ensure_annotation_layers(bm, element_type)
+        ensure_lookup_tables(bm, element_type)
+        container = element_container(bm, element_type)
+        count = 0
+        for elem in container:
+            layers = decode_layer_bytes(elem[stack_layer])
+            if not layers and elem[int_layer] >= 0:
+                layers = [int(elem[int_layer])]
+            if layer_id in layers:
+                count += 1
+        return count
+    finally:
+        bm.free()
 
 
 def collect_element_indices_for_layer(obj: bpy.types.Object, element_type: str, layer_id: int):
@@ -613,7 +644,9 @@ def select_elements_for_layer(obj: bpy.types.Object, element_type: str, layer_id
     container = element_container(bm, element_type)
     settings = obj.mesh_annotations
     mapping = load_element_layers(settings, element_type)
-    merge_stack_layer_into_mapping(mapping, bm, stack_layer, element_type)
+    mapping_changed = merge_stack_layer_into_mapping(mapping, bm, stack_layer, element_type)
+    if mapping_changed and settings is not None:
+        save_element_layers(settings, element_type, mapping)
     target_indices = {int(idx) for idx, layers in mapping.items() if layer_id in layers}
     selected = 0
     for elem in container:
@@ -641,7 +674,9 @@ def mark_face_layer_edges_as_seam(obj: bpy.types.Object, layer_ids) -> int:
     ensure_lookup_tables(bm, ELEMENT_FACE)
     ensure_lookup_tables(bm, ELEMENT_EDGE)
     mapping = load_element_layers(settings, ELEMENT_FACE)
-    merge_stack_layer_into_mapping(mapping, bm, stack_layer, ELEMENT_FACE)
+    mapping_changed = merge_stack_layer_into_mapping(mapping, bm, stack_layer, ELEMENT_FACE)
+    if mapping_changed:
+        save_element_layers(settings, ELEMENT_FACE, mapping)
     order_lookup = layer_order_map(settings, ELEMENT_FACE)
     face_layers_map = {}
     for face in bm.faces:
@@ -725,7 +760,9 @@ def collect_layer_usage_from_selection(obj, element_type: str):
     _int_layer, stack_layer = ensure_annotation_layers(bm, element_type)
     ensure_lookup_tables(bm, element_type)
     mapping = load_element_layers(settings, element_type)
-    merge_stack_layer_into_mapping(mapping, bm, stack_layer, element_type)
+    mapping_changed = merge_stack_layer_into_mapping(mapping, bm, stack_layer, element_type)
+    if mapping_changed and settings is not None:
+        save_element_layers(settings, element_type, mapping)
     container = element_container(bm, element_type)
     usage = Counter()
     order_lookup = layer_order_map(settings, element_type)
@@ -768,7 +805,9 @@ def build_overlay_batches(obj: bpy.types.Object, settings):
         int_layer, stack_layer = ensure_annotation_layers(bm, element_type)
         ensure_lookup_tables(bm, element_type)
         mapping = load_element_layers(settings, element_type)
-        merge_stack_layer_into_mapping(mapping, bm, stack_layer, element_type)
+        mapping_changed = merge_stack_layer_into_mapping(mapping, bm, stack_layer, element_type)
+        if mapping_changed and settings is not None:
+            save_element_layers(settings, element_type, mapping)
         visible_layers = {layer.layer_id: layer for layer in collection if layer.is_visible}
         if not visible_layers:
             continue

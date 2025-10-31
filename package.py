@@ -4,25 +4,27 @@ Package Mesh Annotation Layers addon for distribution
 Creates a ZIP file suitable for Blender addon installation
 """
 
-import os
 import zipfile
 from pathlib import Path
 import datetime
-import re
+import tomllib
 
 def get_addon_version():
-    """Extract version from __init__.py bl_info"""
+    """Extract version from blender_manifest.toml"""
     script_dir = Path(__file__).parent
-    init_file = script_dir / "mesh_annotation_layers" / "__init__.py"
-    
-    with open(init_file, 'r', encoding='utf-8') as f:
-        content = f.read()
-    
-    # Find version in bl_info
-    version_match = re.search(r'"version":\s*\((\d+),\s*(\d+),\s*(\d+)\)', content)
-    if version_match:
-        return f"{version_match.group(1)}.{version_match.group(2)}.{version_match.group(3)}"
-    return "unknown"
+    manifest_file = script_dir / "blender_manifest.toml"
+
+    try:
+        with open(manifest_file, "rb") as f:
+            manifest_data = tomllib.load(f)
+    except FileNotFoundError:
+        return "unknown"
+    except tomllib.TOMLDecodeError as ex:
+        print(f"Warning: failed to parse manifest ({ex}).")
+        return "unknown"
+
+    version = manifest_data.get("version")
+    return str(version) if version else "unknown"
 
 def create_addon_zip():
     """Create a ZIP package of the addon"""
@@ -104,7 +106,7 @@ def create_addon_zip():
     # Get file size
     size_kb = zip_path.stat().st_size / 1024
     
-    print(f"\n✓ Package created successfully!")
+    print(f"\n[OK] Package created successfully!")
     print(f"  Location: {zip_path}")
     print(f"  Size: {size_kb:.2f} KB")
     print(f"\nTo install in Blender:")
