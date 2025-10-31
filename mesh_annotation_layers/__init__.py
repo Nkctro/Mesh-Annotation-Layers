@@ -350,7 +350,7 @@ def merge_stack_layer_into_mapping(mapping, bm, stack_layer, element_type: str):
     for elem in container:
         data = elem[stack_layer]
         key = str(elem.index)
-        layers = [int(v) for v in decode_layer_bytes(data)]
+        layers = decode_layer_bytes(data)
         if layers:
             if mapping.get(key) != layers:
                 mapping[key] = layers
