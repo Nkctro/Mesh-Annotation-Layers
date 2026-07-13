@@ -15,6 +15,7 @@ import bmesh
 import colorsys
 import json
 import random
+from bpy.app.handlers import persistent
 from collections import Counter, defaultdict
 from mathutils import Vector
 from mathutils.bvhtree import BVHTree
@@ -81,6 +82,7 @@ ELEMENT_DEFS = {
 
 EDGE_DRAW_OFFSET = 0.0008
 _draw_handle = None
+_overlay_batch_cache = {}
 
 
 def get_addon_prefs():
@@ -155,7 +157,13 @@ class MeshAnnotationPreferences(bpy.types.AddonPreferences):
         layout.label(text=bi("Auto follows Blender's interface language.", "自动模式会同步 Blender 的界面语言"))
         layout.prop(self, "context_menu_split_types", text=bi("Type Selection Submenu", "右键添加类型子菜单"))
 
-def tag_view3d_redraw(context=None):
+def invalidate_overlay_cache():
+    _overlay_batch_cache.clear()
+
+
+def tag_view3d_redraw(context=None, invalidate_cache=True):
+    if invalidate_cache:
+        invalidate_overlay_cache()
     context = context or bpy.context
     wm = context.window_manager if context else None
     if wm is None:
@@ -167,6 +175,12 @@ def tag_view3d_redraw(context=None):
         for area in screen.areas:
             if area.type == "VIEW_3D":
                 area.tag_redraw()
+
+
+@persistent
+def annotation_depsgraph_update_post(_scene, depsgraph):
+    if any(True for _update in depsgraph.updates):
+        invalidate_overlay_cache()
 
 
 def log_debug_from_settings(settings, *message):
@@ -1011,6 +1025,114 @@ def _evaluated_source_maps(obj: bpy.types.Object, bm: bmesh.types.BMesh, mesh: b
     return face_sources, edge_sources, vertex_sources, "NEAREST"
 
 
+def _polygon_triangles(mesh: bpy.types.Mesh, polygon):
+    coordinates = [mesh.vertices[index].co.copy() for index in polygon.vertices]
+    if len(coordinates) < 3:
+        return []
+    root = coordinates[0]
+    return [
+        (root, coordinates[index], coordinates[index + 1])
+        for index in range(1, len(coordinates) - 1)
+    ]
+
+
+def _evaluated_edge_geometry(mesh: bpy.types.Mesh, edge_index: int, source_index: int):
+    edge = mesh.edges[edge_index]
+    vertex0 = mesh.vertices[edge.vertices[0]]
+    vertex1 = mesh.vertices[edge.vertices[1]]
+    p0 = vertex0.co.copy()
+    p1 = vertex1.co.copy()
+    normal = vertex0.normal + vertex1.normal
+    if normal.length == 0:
+        normal = (p0 - p1).cross(Vector((0.0, 0.0, 1.0)))
+    return source_index, p0, p1, normal
+
+
+def _sparse_exact_overlay_geometry(obj, bm, mesh, source_filters):
+    """Read only annotated evaluated elements when modifier ordering is deterministic."""
+    face_filter = source_filters.get(ELEMENT_FACE, set())
+    edge_filter = source_filters.get(ELEMENT_EDGE, set())
+    vertex_filter = source_filters.get(ELEMENT_VERTEX, set())
+    source_counts = (len(bm.verts), len(bm.edges), len(bm.faces))
+    evaluated_counts = (len(mesh.vertices), len(mesh.edges), len(mesh.polygons))
+
+    if source_counts == evaluated_counts:
+        faces = []
+        for source_index in sorted(face_filter):
+            if 0 <= source_index < len(mesh.polygons):
+                polygon = mesh.polygons[source_index]
+                triangles = _polygon_triangles(mesh, polygon)
+                if triangles:
+                    faces.append((source_index, triangles, polygon.normal.copy()))
+        edges = [
+            _evaluated_edge_geometry(mesh, source_index, source_index)
+            for source_index in sorted(edge_filter)
+            if 0 <= source_index < len(mesh.edges)
+        ]
+        vertices = [
+            (source_index, mesh.vertices[source_index].co.copy(), mesh.vertices[source_index].normal.copy())
+            for source_index in sorted(vertex_filter)
+            if 0 <= source_index < len(mesh.vertices)
+        ]
+        return {ELEMENT_FACE: faces, ELEMENT_EDGE: edges, ELEMENT_VERTEX: vertices}, "DIRECT_SPARSE"
+
+    subdivision_levels = _edit_subdivision_levels(obj)
+    mirror_copies = _edit_mirror_copies(obj)
+    if subdivision_levels == 0 and mirror_copies == 1:
+        return None
+
+    face_multiplier = 1 if subdivision_levels == 0 else 4 ** (subdivision_levels - 1)
+    face_ranges = {}
+    one_copy_face_count = 0
+    for face in bm.faces:
+        child_count = 1 if subdivision_levels == 0 else len(face.verts) * face_multiplier
+        face_ranges[face.index] = (one_copy_face_count, child_count)
+        one_copy_face_count += child_count
+    if one_copy_face_count * mirror_copies != len(mesh.polygons):
+        return None
+
+    # Face ordering is stable through Mirror and Subdivision Surface, so an
+    # annotated cage face can jump directly to its evaluated child range.
+    faces = []
+    for source_index in sorted(face_filter):
+        face_range = face_ranges.get(source_index)
+        if face_range is None:
+            continue
+        range_start, child_count = face_range
+        for copy_index in range(mirror_copies):
+            copy_start = copy_index * one_copy_face_count + range_start
+            for polygon_index in range(copy_start, copy_start + child_count):
+                polygon = mesh.polygons[polygon_index]
+                triangles = _polygon_triangles(mesh, polygon)
+                if triangles:
+                    faces.append((source_index, triangles, polygon.normal.copy()))
+
+    # Mirrored edge/vertex descendants need topology matching. Keep the exact
+    # sparse fast path for face-only mirror overlays and use the generic mapper
+    # when mirrored edge or vertex layers are visible.
+    if mirror_copies > 1 and (edge_filter or vertex_filter):
+        return None
+
+    edge_child_count = 1 if subdivision_levels == 0 else 2 ** subdivision_levels
+    edges = []
+    for source_index in sorted(edge_filter):
+        start = source_index * edge_child_count
+        end = start + edge_child_count
+        if source_index < 0 or end > len(mesh.edges):
+            continue
+        edges.extend(
+            _evaluated_edge_geometry(mesh, edge_index, source_index)
+            for edge_index in range(start, end)
+        )
+    vertices = [
+        (source_index, mesh.vertices[source_index].co.copy(), mesh.vertices[source_index].normal.copy())
+        for source_index in sorted(vertex_filter)
+        if 0 <= source_index < min(len(bm.verts), len(mesh.vertices))
+    ]
+    mode = "MIRROR_SUBDIVISION_SPARSE" if mirror_copies > 1 else "SUBDIVISION_SPARSE"
+    return {ELEMENT_FACE: faces, ELEMENT_EDGE: edges, ELEMENT_VERTEX: vertices}, mode
+
+
 def _cage_overlay_geometry(bm: bmesh.types.BMesh):
     face_triangles = defaultdict(list)
     for loops in bm.calc_loop_triangles():
@@ -1042,6 +1164,17 @@ def _evaluated_overlay_geometry(obj: bpy.types.Object, bm: bmesh.types.BMesh, se
         if not isinstance(mesh, bpy.types.Mesh) or not mesh.vertices:
             raise RuntimeError("evaluated mesh is empty")
 
+        if source_filters is not None:
+            sparse_result = _sparse_exact_overlay_geometry(obj, bm, mesh, source_filters)
+            if sparse_result is not None:
+                geometry, mapping_mode = sparse_result
+                log_debug_from_settings(
+                    settings,
+                    f"Overlay uses evaluated mesh ({mapping_mode} mapping): "
+                    f"{len(mesh.vertices)} verts, {len(mesh.edges)} edges, {len(mesh.polygons)} faces",
+                )
+                return geometry
+
         face_sources, edge_sources, vertex_sources, mapping_mode = _evaluated_source_maps(obj, bm, mesh)
         if source_filters is None:
             face_filter = edge_filter = vertex_filter = None
@@ -1050,26 +1183,16 @@ def _evaluated_overlay_geometry(obj: bpy.types.Object, bm: bmesh.types.BMesh, se
             edge_filter = source_filters.get(ELEMENT_EDGE, set())
             vertex_filter = source_filters.get(ELEMENT_VERTEX, set())
 
-        mesh.calc_loop_triangles()
-        triangles_by_face = defaultdict(list)
-        for triangle in mesh.loop_triangles:
-            source_index = face_sources[triangle.polygon_index]
-            if source_index is None or (face_filter is not None and source_index not in face_filter):
-                continue
-            triangles_by_face[triangle.polygon_index].append(
-                tuple(mesh.vertices[index].co.copy() for index in triangle.vertices)
-            )
-
         faces = []
         for polygon in mesh.polygons:
             source_index = face_sources[polygon.index]
-            triangles = triangles_by_face.get(polygon.index)
             if (
                 source_index is not None
                 and (face_filter is None or source_index in face_filter)
-                and triangles
             ):
-                faces.append((source_index, triangles, polygon.normal.copy()))
+                triangles = _polygon_triangles(mesh, polygon)
+                if triangles:
+                    faces.append((source_index, triangles, polygon.normal.copy()))
 
         edge_faces = _evaluated_edge_faces(mesh)
         edges = []
@@ -1262,6 +1385,17 @@ def build_overlay_batches(obj: bpy.types.Object, settings):
     return results
 
 
+def cached_overlay_batches(obj: bpy.types.Object, settings):
+    cache_key = obj.as_pointer()
+    mesh_pointer = obj.data.as_pointer()
+    cached = _overlay_batch_cache.get(cache_key)
+    if cached is not None and cached[0] == mesh_pointer:
+        return cached[1]
+    batches = build_overlay_batches(obj, settings)
+    _overlay_batch_cache[cache_key] = (mesh_pointer, batches)
+    return batches
+
+
 def draw_overlay():
     context = bpy.context
     obj = context.object
@@ -1274,7 +1408,7 @@ def draw_overlay():
     point_size = max(1.0, float(getattr(settings, "overlay_point_size", 6.0)))
     alpha_mult = max(0.0, min(1.0, float(getattr(settings, "overlay_alpha_multiplier", 0.5))))
     show_backfaces = bool(getattr(settings, "overlay_show_backfaces", True))
-    batches = build_overlay_batches(obj, settings)
+    batches = cached_overlay_batches(obj, settings)
     if not any(batches[etype] for etype in ELEMENT_TYPES):
         log_debug_from_settings(settings, "Draw overlay: nothing to draw")
         return
@@ -2211,14 +2345,14 @@ class MeshAnnotationSettings(bpy.types.PropertyGroup):
         min=1.0,
         max=10.0,
         default=2.0,
-        update=lambda self, context: tag_view3d_redraw(context),
+        update=lambda self, context: tag_view3d_redraw(context, invalidate_cache=False),
     )
     overlay_point_size: bpy.props.FloatProperty(
         name="Vertex Size",
         min=1.0,
         max=20.0,
         default=6.0,
-        update=lambda self, context: tag_view3d_redraw(context),
+        update=lambda self, context: tag_view3d_redraw(context, invalidate_cache=False),
     )
     overlay_edge_trim: bpy.props.FloatProperty(
         name="Edge Shortening",
@@ -2247,13 +2381,13 @@ class MeshAnnotationSettings(bpy.types.PropertyGroup):
         min=0.0,
         max=1.0,
         default=0.5,
-        update=lambda self, context: tag_view3d_redraw(context),
+        update=lambda self, context: tag_view3d_redraw(context, invalidate_cache=False),
     )
 
     overlay_show_backfaces: bpy.props.BoolProperty(
         name="Show Through Mesh",
         default=True,
-        update=lambda self, context: tag_view3d_redraw(context),
+        update=lambda self, context: tag_view3d_redraw(context, invalidate_cache=False),
     )
 
     face_layers: bpy.props.CollectionProperty(type=MeshAnnotationLayer)
@@ -3061,9 +3195,12 @@ classes = (
 
 
 def register():
+    invalidate_overlay_cache()
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Object.mesh_annotations = bpy.props.PointerProperty(type=MeshAnnotationSettings)
+    if annotation_depsgraph_update_post not in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.append(annotation_depsgraph_update_post)
     register_draw_handler()
     bpy.types.VIEW3D_MT_edit_mesh_context_menu.append(draw_context_menu)
 
@@ -3071,6 +3208,9 @@ def register():
 def unregister():
     bpy.types.VIEW3D_MT_edit_mesh_context_menu.remove(draw_context_menu)
     unregister_draw_handler()
+    if annotation_depsgraph_update_post in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.remove(annotation_depsgraph_update_post)
+    invalidate_overlay_cache()
     del bpy.types.Object.mesh_annotations
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)

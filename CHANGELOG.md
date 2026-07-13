@@ -8,6 +8,7 @@ All notable changes to the Mesh Annotation Layers addon will be documented in th
 - Restored viewport GPU state after drawing overlays so Knife/Bisect preview lines no longer thicken or disappear.
 - Added a retopology-specific depth bias so annotations stay visible with “Show Through Mesh” disabled while still respecting occlusion.
 - Draw annotations on modifier-evaluated geometry so face, edge, and vertex layers follow Subdivision Surface and Mirror + Subdivision results.
+- Cache evaluated overlay batches and read only annotated subdivision ranges, avoiding full evaluated-mesh rebuilds on every viewport redraw.
 
 # [1.1.3] - 2025-11-02
 
