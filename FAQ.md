@@ -3,7 +3,7 @@
 ## General Questions
 
 ### Q: What is Mesh Annotation Layers?
-**A:** It's a Blender addon that allows you to add colored overlay layers to mesh elements (vertices, edges, faces) in Edit Mode for organization and annotation purposes, without modifying the actual mesh data.
+**A:** It's a Blender addon that lets you create colored mesh-element layers in Edit Mode and keep them visible across modeling, sculpting, and paint workflows without modifying the actual mesh data.
 
 ### Q: Is this addon free?
 **A:** Yes, it's released under the GPL-3.0 license and is completely free to use.
@@ -37,12 +37,11 @@
 ### Q: Why can't I see the annotation panel?
 **A:** The panel only appears when:
 1. You have a mesh object selected
-2. You're in Edit Mode (press Tab)
-3. The sidebar is open (press N)
-4. You're on the "Annotation" tab
+2. The sidebar is open (press N)
+3. You're on the "Mesh Annotation" tab
 
 ### Q: Can I use this in Object Mode?
-**A:** No, the addon only works in Edit Mode as it's designed for topology work which requires edit-level access to mesh elements.
+**A:** Existing annotations are visible and their layers can be managed in Object Mode. Switch to Edit Mode when you need to change which mesh elements belong to a layer.
 
 ### Q: Can I annotate multiple objects at once?
 **A:** No, each object has its own independent annotation layers. You need to work on objects one at a time.
@@ -50,12 +49,12 @@
 ### Q: Why are my overlays not visible?
 **A:** Check:
 - The layer visibility (eye icon) is enabled
-- You're in Edit Mode
+- The main Overlay toggle is enabled
 - Opacity is not set to 0
 - The layer actually has elements assigned to it
 
 ### Q: How do I change the overlay thickness or transparency?
-**A:** Use the overlay controls in the panel to adjust edge thickness, edge shortening, face offset, vertex size, opacity, and whether overlays show on backfaces.
+**A:** Open the Display subpanel to adjust edge thickness, whole-edge shortening, independent face/edge/vertex offsets, vertex size, opacity, and through-mesh visibility.
 
 ### Q: Can I activate the right layer based on my current selection?
 **A:** Click "Pick From Selection" to activate the layer that already contains the selected elements.
@@ -80,7 +79,7 @@
 **A:** Technically unlimited, but for performance reasons, it's recommended to use only the layers you actually need (typically 5-20 layers is plenty).
 
 ### Q: Does it affect render times?
-**A:** No, annotations are only visual overlays in Edit Mode and have zero impact on rendering.
+**A:** No, annotations are viewport-only overlays and have zero impact on rendering.
 
 ---
 
@@ -112,7 +111,7 @@
 **A:** Yes, annotations work with the base mesh and are independent of modifiers.
 
 ### Q: Does it work with sculpt mode or other modes?
-**A:** No, it only works in Edit Mode. The overlays are also only visible in Edit Mode.
+**A:** Yes. Existing overlays remain visible in Object, Weight Paint, Vertex Paint, Sculpt, and Texture Paint modes. Element assignment remains limited to Edit Mode so topology edits stay explicit.
 
 ### Q: Can I use this in Blender's geometry nodes?
 **A:** No, this is a separate annotation system and doesn't integrate with geometry nodes.

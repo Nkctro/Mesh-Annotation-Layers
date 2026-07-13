@@ -75,6 +75,23 @@ There are many ways to contribute:
 
 ### Testing Your Changes
 
+Run the source-level architecture and localization checks:
+
+```bash
+python -m unittest discover -s tests -p "test_*.py"
+```
+
+Run the Blender integration smoke test (adjust the executable path as needed):
+
+```bash
+blender --background --factory-startup --python tests/blender_smoke.py
+```
+
+The Blender test covers face, edge, and vertex assignment, malformed-data
+handling, evaluated Subdivision Surface mapping, and overlay cache reuse.
+
+For manual interaction checks:
+
 1. Open Blender
 2. If addon is already installed, reload it:
    - F3 → "Reload Scripts"

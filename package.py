@@ -176,7 +176,7 @@ def create_addon_zip(dev_suffix: str = None, dev_build_timestamp: bool = False):
         print(f"Package label: {package_label}")
     print()
 
-    addon_files = ["__init__.py"]
+    addon_files = sorted(addon_dir.glob("*.py"))
     root_files = ["blender_manifest.toml", "LICENSE", "README.md"]
     doc_files = [
         "INSTALL.md",
@@ -202,14 +202,13 @@ def create_addon_zip(dev_suffix: str = None, dev_build_timestamp: bool = False):
                     print(f"  Warning: {filename} not found (required for Blender extensions)")
 
             print("\nAdding addon code:")
-            for filename in addon_files:
-                file_path = addon_dir / filename
+            for file_path in addon_files:
                 if file_path.exists():
-                    arcname = f"mesh_annotation_layers/{filename}"
+                    arcname = f"mesh_annotation_layers/{file_path.name}"
                     zipf.write(file_path, arcname)
                     print(f"  Added: {arcname}")
                 else:
-                    print(f"  Warning: {filename} not found")
+                    print(f"  Warning: {file_path.name} not found")
 
             print("\nAdding documentation:")
             for filename in doc_files:
