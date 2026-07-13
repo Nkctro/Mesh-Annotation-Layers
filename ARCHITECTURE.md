@@ -91,6 +91,12 @@ The formatter tolerates a malformed or incomplete translation and falls back
 without crashing Blender UI drawing. Dynamic element and mode labels are also
 resolved through catalog keys rather than carrying language pairs.
 
+Language preferences use the complete Python package name so Blender extension
+namespaces resolve correctly. Automatic mode maps supported Chinese locales to
+Chinese and every other locale to English. Operator hover text is resolved at
+hover time through `LocalizedDescription`, so manual language changes apply
+immediately without re-registering Blender classes.
+
 ## Extension boundaries
 
 - Add a mesh element type by extending `ElementSpec` and then implementing its

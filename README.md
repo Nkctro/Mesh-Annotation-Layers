@@ -18,7 +18,7 @@
 - **Selection utilities** to pick from selection, select layer elements, or clear/remove assignments quickly
 - **Optional propagation toggle** lets you decide if newly extruded or duplicated geometry should inherit existing annotations
 - **Viewport context menu tools** for seam marking and faster access to layer actions
-- **Bilingual interface** that can follow Blender, force English, force Chinese, or show both labels
+- **Localized interface** that follows Blender or can be forced to English or Chinese
 - **Non-destructive workflow** that leaves geometry, materials, and vertex colors untouched
 - **Persistent data** saved inside the .blend file alongside your meshes
 - **Cross-mode visibility** in Object, Weight Paint, Vertex Paint, Sculpt, and Texture Paint modes
@@ -112,7 +112,7 @@ This will create a ZIP file in the `dist/` folder that can be installed directly
 #### Add-on Preferences
 
 Open `Edit > Preferences > Add-ons > Mesh Annotation Layers` to configure:
-- **Language** mode (Auto, English, Chinese (中文), or Both) for interface labels
+- **Language** mode (Automatic, English, or Chinese) in the add-on panel and preferences; Automatic follows Blender and falls back to English for unsupported languages
 - **Type Selection Submenu** to choose between a compact or split context menu layout
 
 ### Use Cases
@@ -172,7 +172,7 @@ This addon is released under the GPL-3.0 license.
 - **快速工具**：可根据选择激活图层、选中整图层元素或快速清理分配
 - **可选继承开关**：控制挤出或复制产生的新几何是否继承原有标注
 - **视图菜单集成**：在 3D 视图右键菜单操作，可一键将面图层转换为 UV 缝
-- **双语界面**：支持自动、仅英文、仅中文或双语标签
+- **本地化界面**：支持自动、仅英文或仅中文；自动模式跟随 Blender，不支持的语言回退为英文
 - **非破坏流程**：不会修改几何体、材质或顶点颜色数据
 - **持久化数据**：标注内容随 .blend 文件一并保存
 - **跨模式显示**：支持物体、权重绘制、顶点绘制、雕刻和纹理绘制模式
@@ -264,7 +264,7 @@ python3 package.py
 #### 插件偏好设置
 
 在 `Edit > Preferences > Add-ons > Mesh Annotation Layers` 中可设置：
-- **语言**：自动、仅英文、仅中文或双语标签
+- **语言**：可在插件面板或偏好设置中选择自动、仅英文或仅中文
 - **类型子菜单**：控制是否在右键菜单中拆分元素类型
 
 ### 使用场景

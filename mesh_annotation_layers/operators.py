@@ -3,8 +3,8 @@
 import bmesh
 import bpy
 
-from .constants import EDGE, FACE, VERTEX, element_spec
-from .i18n import tr
+from .constants import EDGE, ELEMENT_TYPES, FACE, VERTEX, element_spec
+from .i18n import LocalizedDescription, tr
 from .loops import (
     collect_edge_loop_edges,
     collect_face_loop_faces,
@@ -31,10 +31,79 @@ from .model import (
 from .overlay import tag_view3d_redraw
 
 
-class MESH_OT_annotation_layer_add(bpy.types.Operator):
+class MESH_OT_annotation_toggle_overlay(LocalizedDescription, bpy.types.Operator):
+    bl_idname = "mesh.annotation_toggle_overlay"
+    bl_label = "Toggle Annotation Overlay"
+    bl_options = {"INTERNAL"}
+    tooltip_key = "Show or hide annotation overlays in the viewport."
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.object
+        return obj and obj.type == "MESH"
+
+    def execute(self, context):
+        settings = context.object.mesh_annotations
+        settings.enable_overlay = not settings.enable_overlay
+        return {"FINISHED"}
+
+
+class MESH_OT_annotation_toggle_solo(LocalizedDescription, bpy.types.Operator):
+    bl_idname = "mesh.annotation_toggle_solo"
+    bl_label = "Toggle Solo Annotation Layer"
+    bl_options = {"INTERNAL"}
+    tooltip_key = "Show only the active annotation layer for each element type."
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.object
+        return obj and obj.type == "MESH"
+
+    def execute(self, context):
+        settings = context.object.mesh_annotations
+        settings.solo_active = not settings.solo_active
+        return {"FINISHED"}
+
+
+class MESH_OT_annotation_toggle_layer_visibility(
+    LocalizedDescription, bpy.types.Operator
+):
+    bl_idname = "mesh.annotation_toggle_layer_visibility"
+    bl_label = "Toggle Annotation Layer Visibility"
+    bl_options = {"INTERNAL"}
+    tooltip_key = "Show or hide this annotation layer."
+
+    element_type: bpy.props.EnumProperty(
+        name="Element",
+        items=(
+            (FACE, "Face", "Face layer"),
+            (EDGE, "Edge", "Edge layer"),
+            (VERTEX, "Vertex", "Vertex layer"),
+        ),
+        default=FACE,
+    )
+    layer_id: bpy.props.IntProperty()
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.object
+        return obj and obj.type == "MESH"
+
+    def execute(self, context):
+        settings = context.object.mesh_annotations
+        layer = get_layer_by_id(settings, self.element_type, self.layer_id)
+        if layer is None:
+            self.report({"WARNING"}, tr("Layer not found"))
+            return {"CANCELLED"}
+        layer.is_visible = not layer.is_visible
+        return {"FINISHED"}
+
+
+class MESH_OT_annotation_layer_add(LocalizedDescription, bpy.types.Operator):
     bl_idname = "mesh.annotation_layer_add"
     bl_label = tr('Add Annotation Layer')
     bl_options = {"REGISTER", "UNDO"}
+    tooltip_key = "Create a new annotation layer for the current element type."
 
     element_type: bpy.props.EnumProperty(
         name="Element",
@@ -57,10 +126,11 @@ class MESH_OT_annotation_layer_add(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class MESH_OT_annotation_layer_remove(bpy.types.Operator):
+class MESH_OT_annotation_layer_remove(LocalizedDescription, bpy.types.Operator):
     bl_idname = "mesh.annotation_layer_remove"
     bl_label = tr('Remove Annotation Layer')
     bl_options = {"REGISTER", "UNDO"}
+    tooltip_key = "Delete the active annotation layer and remove its assignments."
 
     element_type: bpy.props.EnumProperty(
         name="Element",
@@ -89,10 +159,11 @@ class MESH_OT_annotation_layer_remove(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class MESH_OT_annotation_layer_move(bpy.types.Operator):
+class MESH_OT_annotation_layer_move(LocalizedDescription, bpy.types.Operator):
     bl_idname = "mesh.annotation_layer_move"
     bl_label = tr('Reorder Annotation Layer')
     bl_options = {"REGISTER", "UNDO"}
+    tooltip_key = "Move the active layer up or down in the overlay order."
 
     element_type: bpy.props.EnumProperty(
         name="Element",
@@ -142,10 +213,11 @@ class MESH_OT_annotation_layer_move(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class MESH_OT_annotation_assign_active(bpy.types.Operator):
+class MESH_OT_annotation_assign_active(LocalizedDescription, bpy.types.Operator):
     bl_idname = "mesh.annotation_assign_active"
     bl_label = tr('Assign Selection to Active Layer')
     bl_options = {"REGISTER", "UNDO"}
+    tooltip_key = "Add the selected elements to the active annotation layer."
 
     element_type: bpy.props.EnumProperty(
         name="Element",
@@ -176,10 +248,11 @@ class MESH_OT_annotation_assign_active(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class MESH_OT_annotation_select_layer(bpy.types.Operator):
+class MESH_OT_annotation_select_layer(LocalizedDescription, bpy.types.Operator):
     bl_idname = "mesh.annotation_select_layer"
     bl_label = tr('Select Elements in Layer')
     bl_options = {"REGISTER", "UNDO"}
+    tooltip_key = "Select every mesh element assigned to this layer."
 
     element_type: bpy.props.EnumProperty(
         name="Element",
@@ -207,10 +280,13 @@ class MESH_OT_annotation_select_layer(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class MESH_OT_annotation_activate_from_selection(bpy.types.Operator):
+class MESH_OT_annotation_activate_from_selection(
+    LocalizedDescription, bpy.types.Operator
+):
     bl_idname = "mesh.annotation_activate_from_selection"
     bl_label = tr('Pick Active Layer From Selection')
     bl_options = {"REGISTER", "UNDO"}
+    tooltip_key = "Make the layer used most by the current selection active."
 
     element_type: bpy.props.EnumProperty(
         name="Element",
@@ -245,10 +321,13 @@ class MESH_OT_annotation_activate_from_selection(bpy.types.Operator):
         return {"CANCELLED"}
 
 
-class MESH_OT_annotation_assign_loop(bpy.types.Operator):
+class MESH_OT_annotation_assign_loop(LocalizedDescription, bpy.types.Operator):
     bl_idname = "mesh.annotation_assign_loop"
     bl_label = tr('Assign Loop to Active Layer')
     bl_options = {"REGISTER", "UNDO"}
+    tooltip_key = (
+        "Derive a complete loop or path from the selection and add it to the active layer."
+    )
 
     element_type: bpy.props.EnumProperty(
         name="Element",
@@ -293,10 +372,13 @@ class MESH_OT_annotation_assign_loop(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class MESH_OT_annotation_assign_valence(bpy.types.Operator):
+class MESH_OT_annotation_assign_valence(LocalizedDescription, bpy.types.Operator):
     bl_idname = "mesh.annotation_assign_valence"
     bl_label = tr('Annotate Vertices by Valence')
     bl_options = {"REGISTER", "UNDO"}
+    tooltip_key = (
+        "Add every vertex with the chosen valence to the active vertex layer."
+    )
 
     valence: bpy.props.IntProperty(
         name="Valence",
@@ -334,10 +416,15 @@ class MESH_OT_annotation_assign_valence(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class MESH_OT_annotation_assign_valence_new_layer(bpy.types.Operator):
+class MESH_OT_annotation_assign_valence_new_layer(
+    LocalizedDescription, bpy.types.Operator
+):
     bl_idname = "mesh.annotation_assign_valence_new_layer"
     bl_label = tr('Annotate Valence to New Layer')
     bl_options = {"REGISTER", "UNDO"}
+    tooltip_key = (
+        "Create a vertex layer and add every vertex with the chosen valence."
+    )
 
     valence: bpy.props.IntProperty(
         name="Valence",
@@ -377,10 +464,15 @@ class MESH_OT_annotation_assign_valence_new_layer(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class MESH_OT_annotation_assign_new_layer(bpy.types.Operator):
+class MESH_OT_annotation_assign_new_layer(
+    LocalizedDescription, bpy.types.Operator
+):
     bl_idname = "mesh.annotation_assign_new_layer"
     bl_label = tr('Assign Selection to New Layer')
     bl_options = {"REGISTER", "UNDO"}
+    tooltip_key = (
+        "Create a new layer and add the selection or derived loop to it."
+    )
 
     element_type: bpy.props.EnumProperty(
         name="Element",
@@ -463,10 +555,11 @@ class MESH_OT_annotation_assign_new_layer(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class MESH_OT_annotation_assign_layer(bpy.types.Operator):
+class MESH_OT_annotation_assign_layer(LocalizedDescription, bpy.types.Operator):
     bl_idname = "mesh.annotation_assign_layer"
     bl_label = tr('Assign Selection to Layer')
     bl_options = {"REGISTER", "UNDO"}
+    tooltip_key = "Add the selection or derived loop to this existing layer."
 
     element_type: bpy.props.EnumProperty(
         name="Element",
@@ -516,10 +609,13 @@ class MESH_OT_annotation_assign_layer(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class MESH_OT_annotation_mark_seam_active(bpy.types.Operator):
+class MESH_OT_annotation_mark_seam_active(
+    LocalizedDescription, bpy.types.Operator
+):
     bl_idname = "mesh.annotation_mark_seam_active_face_layer"
     bl_label = tr('Mark Active Layer Seams')
     bl_options = {"REGISTER", "UNDO"}
+    tooltip_key = "Mark the boundary edges of the active face layer as UV seams."
 
     @classmethod
     def poll(cls, context):
@@ -545,10 +641,11 @@ class MESH_OT_annotation_mark_seam_active(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class MESH_OT_annotation_mark_seam_all(bpy.types.Operator):
+class MESH_OT_annotation_mark_seam_all(LocalizedDescription, bpy.types.Operator):
     bl_idname = "mesh.annotation_mark_seam_all_face_layers"
     bl_label = tr('Mark All Layer Seams')
     bl_options = {"REGISTER", "UNDO"}
+    tooltip_key = "Mark the boundary edges of every face layer as UV seams."
 
     @classmethod
     def poll(cls, context):
@@ -573,10 +670,11 @@ class MESH_OT_annotation_mark_seam_all(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class MESH_OT_annotation_clear_selected(bpy.types.Operator):
+class MESH_OT_annotation_clear_selected(LocalizedDescription, bpy.types.Operator):
     bl_idname = "mesh.annotation_clear_selected"
     bl_label = tr('Clear Annotation From Selected')
     bl_options = {"REGISTER", "UNDO"}
+    tooltip_key = "Remove annotation assignments from the selected elements."
 
     element_type: bpy.props.EnumProperty(
         name="Element",
@@ -608,10 +706,13 @@ class MESH_OT_annotation_clear_selected(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class MESH_OT_annotation_set_element_type(bpy.types.Operator):
+class MESH_OT_annotation_set_element_type(
+    LocalizedDescription, bpy.types.Operator
+):
     bl_idname = "mesh.annotation_set_element_type"
     bl_label = tr('Switch Annotation Type')
     bl_options = {"INTERNAL"}
+    tooltip_key = "Switch the annotation workspace and mesh selection mode."
 
     element_type: bpy.props.EnumProperty(
         name="Element",
@@ -639,10 +740,12 @@ class MESH_OT_annotation_set_element_type(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class MESH_OT_annotation_enter_edit_mode(bpy.types.Operator):
+class MESH_OT_annotation_enter_edit_mode(
+    LocalizedDescription, bpy.types.Operator
+):
     bl_idname = "mesh.annotation_enter_edit_mode"
     bl_label = tr('Edit Annotations')
-    bl_description = tr('Switch to Edit Mode to change annotation assignments')
+    tooltip_key = "Switch to Edit Mode to change annotation assignments"
 
     @classmethod
     def poll(cls, context):
@@ -660,6 +763,9 @@ class MESH_OT_annotation_enter_edit_mode(bpy.types.Operator):
 
 
 CLASSES = (
+    MESH_OT_annotation_toggle_overlay,
+    MESH_OT_annotation_toggle_solo,
+    MESH_OT_annotation_toggle_layer_visibility,
     MESH_OT_annotation_layer_add,
     MESH_OT_annotation_layer_remove,
     MESH_OT_annotation_layer_move,

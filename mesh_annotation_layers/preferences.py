@@ -2,23 +2,15 @@
 
 import bpy
 
-from .i18n import tr
-
-
-ADDON_PACKAGE = (__package__ or "").partition(".")[0]
-
-
-def addon_preferences():
-    try:
-        prefs = bpy.context.preferences
-    except AttributeError:
-        return None
-    if not prefs:
-        return None
-    addon = prefs.addons.get(ADDON_PACKAGE)
-    if addon:
-        return addon.preferences
-    return None
+from .i18n import (
+    ADDON_PACKAGE,
+    addon_preferences,
+    blender_locale,
+    language_from_locale,
+    language_items,
+    redraw_ui,
+    tr,
+)
 
 
 class MeshAnnotationPreferences(bpy.types.AddonPreferences):
@@ -26,13 +18,11 @@ class MeshAnnotationPreferences(bpy.types.AddonPreferences):
 
     language_display: bpy.props.EnumProperty(
         name="Language",
-        items=(
-            ("AUTO", "Auto", "Follow Blender interface language"),
-            ("EN", "English", "Always show English labels"),
-            ("ZH", "中文", "始终显示中文"),
-            ("BOTH", "Both", "Show both English and Chinese text"),
+        description=(
+            "Choose automatic Blender-language detection or a manual add-on language"
         ),
-        default="AUTO",
+        items=language_items,
+        update=lambda _self, context: redraw_ui(context),
     )
 
     context_menu_split_types: bpy.props.BoolProperty(
@@ -42,13 +32,26 @@ class MeshAnnotationPreferences(bpy.types.AddonPreferences):
             "Disable for quicker access with direct actions."
         ),
         default=True,
+        update=lambda _self, context: redraw_ui(context),
     )
 
     def draw(self, _context):
         layout = self.layout
-        layout.prop(self, "language_display", text=tr('Language'))
-        layout.label(text=tr("Auto follows Blender's interface language."))
-        layout.prop(self, "context_menu_split_types", text=tr('Type Selection Submenu'))
+        layout.prop(self, "language_display", text=tr("Language"))
+        if self.language_display == "AUTO":
+            automatic_key = (
+                "Chinese"
+                if language_from_locale(blender_locale()) == "ZH"
+                else "English"
+            )
+            layout.label(
+                text=tr("Automatic language: {language}", language=tr(automatic_key))
+            )
+        layout.prop(
+            self,
+            "context_menu_split_types",
+            text=tr("Type Selection Submenu"),
+        )
 
 
 CLASSES = (MeshAnnotationPreferences,)

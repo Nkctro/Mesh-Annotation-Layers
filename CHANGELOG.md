@@ -9,6 +9,8 @@ All notable changes to the Mesh Annotation Layers addon will be documented in th
 - Added face/edge/vertex workspace tabs that synchronize Blender's mesh selection mode when editing.
 - Added a one-click action to enter Edit Mode from read-only annotation views.
 - Added a centralized translation catalog with safe named-parameter formatting.
+- Added localized hover descriptions for every annotation operator, including
+  icon-only layer controls and viewport overlay toggles.
 
 ### Changed
 - Reorganized the sidebar around one active element type and moved display tuning into a collapsed child panel.
@@ -23,6 +25,9 @@ All notable changes to the Mesh Annotation Layers addon will be documented in th
 - Replaced mutable element metadata dictionaries with validated immutable element specifications.
 - Made registration transactional so partial Blender registration failures clean themselves up.
 - Package every Python module instead of assuming a single-file add-on.
+- Language selection now offers Automatic, English, and Chinese directly in the
+  annotation panel; Automatic follows Blender and falls back to English when the
+  interface language has no add-on translation.
 
 ### Fixed
 - Map annotated source vertices to their actual Subdivision Surface descendants instead of relying on evaluated vertex ordering.
@@ -32,6 +37,8 @@ All notable changes to the Mesh Annotation Layers addon will be documented in th
 - Ignore malformed serialized layer entries without breaking panel drawing or operators.
 - Removed a duplicated context-menu implementation that could diverge during maintenance.
 - Added repeatable source-contract and Blender integration smoke tests for future refactors.
+- Restored manual language selection for extensions installed under Blender's
+  `bl_ext.<repository>.<extension>` namespace.
 
 # [1.1.5] - 2025-11-02
 
