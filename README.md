@@ -16,6 +16,7 @@
 - **Flexible assignments** including assign selected, assign loop, and one-click create-new-layer workflows
 - **Custom overlay styling** with per-layer colors plus controls for opacity, line width, vertex size, face offset, edge trimming, and backface visibility
 - **Selection utilities** to pick from selection, select layer elements, or clear/remove assignments quickly
+- **Optional propagation toggle** lets you decide if newly extruded or duplicated geometry should inherit existing annotations
 - **Viewport context menu tools** for seam marking and faster access to layer actions
 - **Bilingual interface** that can follow Blender, force English, force Chinese, or show both labels
 - **Non-destructive workflow** that leaves geometry, materials, and vertex colors untouched
@@ -163,6 +164,7 @@ This addon is released under the GPL-3.0 license.
 - **灵活分配**：支持“分配选中”、“分配循环”以及一键新建图层并完成分配
 - **叠加样式自定义**：提供颜色、透明度、线宽、点大小、面偏移、边截断、背面可见性等调节
 - **快速工具**：可根据选择激活图层、选中整图层元素或快速清理分配
+- **可选继承开关**：控制挤出或复制产生的新几何是否继承原有标注
 - **视图菜单集成**：在 3D 视图右键菜单操作，可一键将面图层转换为 UV 缝
 - **双语界面**：支持自动、仅英文、仅中文或双语标签
 - **非破坏流程**：不会修改几何体、材质或顶点颜色数据
