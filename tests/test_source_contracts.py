@@ -105,6 +105,14 @@ class SourceContractsTest(unittest.TestCase):
         self.assertNotIn('"BOTH"', source)
         self.assertNotIn('partition(".")', source)
 
+    def test_language_selector_lives_only_in_addon_preferences(self):
+        panel_source = (PACKAGE / "ui.py").read_text(encoding="utf-8")
+        preferences_source = (PACKAGE / "preferences.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn('"language_display"', panel_source)
+        self.assertIn('layout.prop(self, "language_display"', preferences_source)
+
     def test_entry_point_stays_small(self):
         line_count = len(
             (PACKAGE / "__init__.py").read_text(encoding="utf-8").splitlines()

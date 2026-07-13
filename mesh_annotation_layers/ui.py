@@ -383,16 +383,6 @@ class VIEW3D_PT_mesh_annotation(bpy.types.Panel):
         obj = context.object
         settings = obj.mesh_annotations
 
-        preferences = addon_preferences()
-        if preferences is not None:
-            language = layout.row(align=True)
-            language.prop(
-                preferences,
-                "language_display",
-                text=tr("Language"),
-                icon="WORLD",
-            )
-
         toolbar = layout.row(align=True)
         toolbar.operator(
             "mesh.annotation_toggle_overlay",

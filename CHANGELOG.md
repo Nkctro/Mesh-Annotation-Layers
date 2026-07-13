@@ -25,9 +25,9 @@ All notable changes to the Mesh Annotation Layers addon will be documented in th
 - Replaced mutable element metadata dictionaries with validated immutable element specifications.
 - Made registration transactional so partial Blender registration failures clean themselves up.
 - Package every Python module instead of assuming a single-file add-on.
-- Language selection now offers Automatic, English, and Chinese directly in the
-  annotation panel; Automatic follows Blender and falls back to English when the
-  interface language has no add-on translation.
+- Language selection in the add-on preferences offers Automatic, English, and
+  Chinese; Automatic follows Blender and falls back to English when the interface
+  language has no add-on translation.
 
 ### Fixed
 - Treat Undo and Redo as complete overlay-cache boundaries, then restore annotation ownership from the mesh custom-data layers so labels cannot drift onto stale element indices.

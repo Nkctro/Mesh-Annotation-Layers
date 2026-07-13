@@ -112,7 +112,7 @@ This will create a ZIP file in the `dist/` folder that can be installed directly
 #### Add-on Preferences
 
 Open `Edit > Preferences > Add-ons > Mesh Annotation Layers` to configure:
-- **Language** mode (Automatic, English, or Chinese) in the add-on panel and preferences; Automatic follows Blender and falls back to English for unsupported languages
+- **Language** mode (Automatic, English, or Chinese); Automatic follows Blender and falls back to English for unsupported languages
 - **Type Selection Submenu** to choose between a compact or split context menu layout
 
 ### Use Cases
@@ -264,7 +264,7 @@ python3 package.py
 #### 插件偏好设置
 
 在 `Edit > Preferences > Add-ons > Mesh Annotation Layers` 中可设置：
-- **语言**：可在插件面板或偏好设置中选择自动、仅英文或仅中文
+- **语言**：可选择自动、仅英文或仅中文；自动模式跟随 Blender，不支持时回退为英文
 - **类型子菜单**：控制是否在右键菜单中拆分元素类型
 
 ### 使用场景
