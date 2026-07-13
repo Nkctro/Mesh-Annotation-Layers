@@ -2,6 +2,21 @@
 
 All notable changes to the Mesh Annotation Layers addon will be documented in this file.
 
+# [1.1.5] - 2025-11-02
+
+### Fixed
+- Restored viewport GPU state after drawing overlays so Knife/Bisect preview lines no longer thicken or disappear.
+- Added a retopology-specific depth bias so annotations stay visible with “Show Through Mesh” disabled while still respecting occlusion.
+- Draw annotations on modifier-evaluated geometry so face, edge, and vertex layers follow Subdivision Surface and Mirror + Subdivision results.
+
+# [1.1.3] - 2025-11-02
+
+### Added
+- Optional "Propagate On New Geometry" toggle to control whether extruded or duplicated geometry copies existing annotations.
+
+### Fixed
+- Newly created geometry no longer inherits annotations when propagation is disabled, preventing accidental layer carry-over.
+
 # [1.1.2] - 2025-10-31
 
 ### Changed
