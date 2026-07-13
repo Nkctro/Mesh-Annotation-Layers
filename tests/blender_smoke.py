@@ -123,6 +123,44 @@ def test_assignments_and_evaluated_geometry():
     return obj, geometry, elapsed_ms
 
 
+def test_multi_layer_assignment_and_active_removal(obj):
+    settings = obj.mesh_annotations
+    first_layer = settings.face_layers[0]
+    second_layer = model.create_layer(settings, FACE)
+    target_index = 12
+
+    assert model.assign_elements_to_layer(
+        obj, FACE, first_layer.layer_id, [target_index]
+    )
+    assert model.assign_elements_to_layer(
+        obj, FACE, second_layer.layer_id, [target_index]
+    )
+    assert model.load_element_layers(settings, FACE)[str(target_index)] == [
+        first_layer.layer_id,
+        second_layer.layer_id,
+    ]
+
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode="EDIT")
+    try:
+        bm = bmesh.from_edit_mesh(obj.data)
+        bm.faces.ensure_lookup_table()
+        for face in bm.faces:
+            face.select = False
+        bm.faces[target_index].select = True
+        bmesh.update_edit_mesh(obj.data, loop_triangles=False, destructive=False)
+
+        assert bpy.ops.mesh.annotation_clear_selected(
+            element_type=FACE,
+            mode="ACTIVE",
+        ) == {"FINISHED"}
+        assert model.load_element_layers(settings, FACE)[str(target_index)] == [
+            first_layer.layer_id
+        ]
+    finally:
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+
 def test_cache_reuse(obj):
     original_builder = overlay.build_overlay_batches
     calls = []
@@ -259,6 +297,7 @@ def main():
         test_history_handlers_registered()
         test_localization_modes_and_tooltips()
         obj, geometry, elapsed_ms = test_assignments_and_evaluated_geometry()
+        test_multi_layer_assignment_and_active_removal(obj)
         test_button_operators(obj)
         test_cache_reuse(obj)
         test_overlay_color_is_selection_independent(obj)

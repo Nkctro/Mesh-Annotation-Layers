@@ -44,6 +44,7 @@ ZH_CN = {
     "Assign Loop to Existing Layer": "循环添加到已有图层",
     "Clear Selected (All Layers)": "清除选中（全部图层）",
     "Clear Selected (Top Layer)": "清除选中（顶部图层）",
+    "Clear Selected (Active Layer)": "清除选中（活动图层）",
     "Add": "添加",
     "Remove": "删除",
     "Selected Elements": "选中元素",
@@ -121,6 +122,7 @@ ZH_CN = {
     "Mark Seams (Layer)": "当前层缝合",
     "Mark Seams (All)": "全部层缝合",
     "Remove Annotations From Selected": "移除选中元素的标注",
+    "Remove Selected From Active Layer": "从活动图层移除选中",
     "Opacity": "整体透明度",
     "Show Through Mesh": "穿透显示",
     "Surface Offset": "表面偏移",
@@ -167,8 +169,8 @@ ZH_CN = {
     "Mark the boundary edges of every face layer as UV seams.": (
         "将所有面图层的边界边标记为 UV 缝合边。"
     ),
-    "Remove annotation assignments from the selected elements.": (
-        "移除所选元素的标注分配。"
+    "Remove the active, topmost, or all annotation assignments from selected elements.": (
+        "从所选元素移除活动层、顶层或全部标注分配。"
     ),
     "Switch the annotation workspace and mesh selection mode.": (
         "切换标注工作区和网格选择模式。"

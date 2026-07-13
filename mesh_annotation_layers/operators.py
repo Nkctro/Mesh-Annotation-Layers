@@ -674,7 +674,9 @@ class MESH_OT_annotation_clear_selected(LocalizedDescription, bpy.types.Operator
     bl_idname = "mesh.annotation_clear_selected"
     bl_label = tr('Clear Annotation From Selected')
     bl_options = {"REGISTER", "UNDO"}
-    tooltip_key = "Remove annotation assignments from the selected elements."
+    tooltip_key = (
+        "Remove the active, topmost, or all annotation assignments from selected elements."
+    )
 
     element_type: bpy.props.EnumProperty(
         name="Element",
@@ -688,10 +690,19 @@ class MESH_OT_annotation_clear_selected(LocalizedDescription, bpy.types.Operator
     mode: bpy.props.EnumProperty(
         name="Mode",
         items=(
+            (
+                "ACTIVE",
+                "Active Layer",
+                "Remove only the active annotation layer from the selection",
+            ),
             ("ALL", "All Layers", "Remove all annotations from the selection"),
-            ("TOP", "Top Layer Only", "Remove only the most recently assigned annotation layer"),
+            (
+                "TOP",
+                "Top Layer Only",
+                "Remove only the highest annotation in layer order",
+            ),
         ),
-        default="ALL",
+        default="ACTIVE",
     )
 
     @classmethod
@@ -701,7 +712,20 @@ class MESH_OT_annotation_clear_selected(LocalizedDescription, bpy.types.Operator
 
     def execute(self, context):
         obj = context.object
-        clear_elements_from_layer(obj, self.element_type, -1, only_selected=True, mode=self.mode)
+        layer_id = -1
+        if self.mode == "ACTIVE":
+            layer = active_layer(obj.mesh_annotations, self.element_type)
+            if layer is None:
+                self.report({"WARNING"}, tr('No active layer selected'))
+                return {"CANCELLED"}
+            layer_id = layer.layer_id
+        clear_elements_from_layer(
+            obj,
+            self.element_type,
+            layer_id,
+            only_selected=True,
+            mode=self.mode,
+        )
         tag_view3d_redraw(context)
         return {"FINISHED"}
 

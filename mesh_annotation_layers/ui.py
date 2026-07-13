@@ -85,6 +85,11 @@ TYPE_MENU_ACTIONS = {
         "mode": "TOP",
         "label": "Choose Element Type",
     },
+    "clear_selected_active": {
+        "kind": "clear",
+        "mode": "ACTIVE",
+        "label": "Choose Element Type",
+    },
 }
 
 
@@ -165,6 +170,11 @@ class VIEW3D_MT_mesh_annotation_type_clear_selected_all(MeshAnnotationTypeMenuBa
 class VIEW3D_MT_mesh_annotation_type_clear_selected_top(MeshAnnotationTypeMenuBase):
     bl_idname = "VIEW3D_MT_mesh_annotation_type_clear_selected_top"
     action_key = "clear_selected_top"
+
+
+class VIEW3D_MT_mesh_annotation_type_clear_selected_active(MeshAnnotationTypeMenuBase):
+    bl_idname = "VIEW3D_MT_mesh_annotation_type_clear_selected_active"
+    action_key = "clear_selected_active"
 
 
 def add_assign_selected_active_entry(layout, context):
@@ -248,18 +258,22 @@ def add_assign_loop_existing_entry(layout, context):
 
 
 def add_clear_selected_entry(layout, context, mode: str):
-    if mode == "ALL":
+    if mode == "ACTIVE":
+        text = tr('Clear Selected (Active Layer)')
+        icon = "REMOVE"
+    elif mode == "ALL":
         text = tr('Clear Selected (All Layers)')
         icon = "X"
     else:
         text = tr('Clear Selected (Top Layer)')
         icon = "REMOVE"
     if context_menu_use_type_choice():
-        menu_id = (
-            "VIEW3D_MT_mesh_annotation_type_clear_selected_all"
-            if mode == "ALL"
-            else "VIEW3D_MT_mesh_annotation_type_clear_selected_top"
-        )
+        menu_ids = {
+            "ACTIVE": "VIEW3D_MT_mesh_annotation_type_clear_selected_active",
+            "ALL": "VIEW3D_MT_mesh_annotation_type_clear_selected_all",
+            "TOP": "VIEW3D_MT_mesh_annotation_type_clear_selected_top",
+        }
+        menu_id = menu_ids[mode]
         layout.menu(menu_id, text=text, icon=icon)
     else:
         element_type = context_menu_default_type(context)
@@ -327,8 +341,9 @@ class VIEW3D_MT_mesh_annotation_remove_selected(bpy.types.Menu):
 
     def draw(self, context):
         layout = self.layout
-        add_clear_selected_entry(layout, context, mode="ALL")
+        add_clear_selected_entry(layout, context, mode="ACTIVE")
         add_clear_selected_entry(layout, context, mode="TOP")
+        add_clear_selected_entry(layout, context, mode="ALL")
 
 
 class MESH_UL_annotation_layers(bpy.types.UIList):
@@ -555,11 +570,11 @@ class VIEW3D_PT_mesh_annotation(bpy.types.Panel):
             box.separator(factor=0.5)
             clear_op = box.operator(
                 "mesh.annotation_clear_selected",
-                text=tr('Remove Annotations From Selected'),
-                icon="X",
+                text=tr('Remove Selected From Active Layer'),
+                icon="REMOVE",
             )
             clear_op.element_type = element_type
-            clear_op.mode = "ALL"
+            clear_op.mode = "ACTIVE"
 
 
 class VIEW3D_PT_mesh_annotation_display(bpy.types.Panel):
@@ -627,6 +642,7 @@ CLASSES = (
     VIEW3D_MT_mesh_annotation_type_assign_loop_existing,
     VIEW3D_MT_mesh_annotation_type_clear_selected_all,
     VIEW3D_MT_mesh_annotation_type_clear_selected_top,
+    VIEW3D_MT_mesh_annotation_type_clear_selected_active,
     VIEW3D_MT_mesh_annotation_add,
     VIEW3D_MT_mesh_annotation_add_selected,
     VIEW3D_MT_mesh_annotation_add_loop,

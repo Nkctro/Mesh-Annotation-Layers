@@ -30,6 +30,7 @@ All notable changes to the Mesh Annotation Layers addon will be documented in th
   language has no add-on translation.
 
 ### Fixed
+- Make the primary remove-selected action affect only the active layer, preserving any other annotations assigned to the same mesh elements; explicit top-layer and all-layer removal remain available in the context menu.
 - Treat Undo and Redo as complete overlay-cache boundaries, then restore annotation ownership from the mesh custom-data layers so labels cannot drift onto stale element indices.
 - Keep annotation colors visually stable across selection changes by removing selection-dependent brightness boosts and additive blending.
 - Map annotated source vertices to their actual Subdivision Surface descendants instead of relying on evaluated vertex ordering.

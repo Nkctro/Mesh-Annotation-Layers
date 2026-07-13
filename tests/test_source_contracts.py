@@ -129,6 +129,12 @@ class SourceContractsTest(unittest.TestCase):
         for handler_name in ("undo_pre", "undo_post", "redo_pre", "redo_post"):
             self.assertIn(f"bpy.app.handlers.{handler_name}", source)
 
+    def test_primary_remove_selected_action_preserves_other_layers(self):
+        operator_source = (PACKAGE / "operators.py").read_text(encoding="utf-8")
+        panel_source = (PACKAGE / "ui.py").read_text(encoding="utf-8")
+        self.assertIn('default="ACTIVE"', operator_source)
+        self.assertIn('clear_op.mode = "ACTIVE"', panel_source)
+
 
 if __name__ == "__main__":
     unittest.main()

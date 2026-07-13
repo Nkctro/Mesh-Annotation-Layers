@@ -93,8 +93,8 @@ This will create a ZIP file in the `dist/` folder that can be installed directly
 #### Selection Tools
 
 - **Select Layer Elements**: Highlight every element currently assigned to the active layer
-- **Remove Selected**: Remove only the selected elements from the active layer
-- **Clear Selected**: Clear the entire active layer in one click
+- **Remove Selected From Active Layer**: Remove the active layer only from selected elements; underlying annotations remain assigned and become visible again
+- The context menu also provides explicit removal of the top layer or all layers from selected elements
 
 #### Overlay Controls
 
@@ -245,8 +245,8 @@ python3 package.py
 #### 选择工具
 
 - **Select Layer Elements（选择图层元素）**：高亮显示活动图层中的所有元素
-- **Remove Selected（移除选中）**：仅移除选区内的元素
-- **Clear Selected（清除选中）**：一键清理活动图层的所有分配
+- **从活动图层移除选中**：仅移除所选元素上的活动图层，底层标注会保留并重新显示
+- 右键菜单还会明确提供“移除顶层”和“移除全部图层”两种操作
 
 #### 叠加显示调整
 
