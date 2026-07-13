@@ -1,9 +1,12 @@
 """Run with: blender --background --factory-startup --python tests/blender_smoke.py"""
 
+import importlib.util
 import os
 import sys
 import time
+import types
 from pathlib import Path
+from types import SimpleNamespace
 
 import bmesh
 import bpy
@@ -14,8 +17,38 @@ sys.path.insert(0, str(ROOT))
 GRID_SEGMENTS = int(os.environ.get("MAL_GRID_SEGMENTS", "28"))
 
 import mesh_annotation_layers as addon
-from mesh_annotation_layers import evaluated_geometry, model, overlay
+from mesh_annotation_layers import evaluated_geometry, i18n, model, operators, overlay
 from mesh_annotation_layers.constants import EDGE, FACE, VERTEX
+
+
+def test_extension_namespace_package_name():
+    package_name = "bl_ext.user_default.mesh_annotation_layers"
+    for namespace in ("bl_ext", "bl_ext.user_default"):
+        if namespace not in sys.modules:
+            module = types.ModuleType(namespace)
+            module.__path__ = []
+            sys.modules[namespace] = module
+
+    spec = importlib.util.spec_from_file_location(
+        package_name,
+        ROOT / "mesh_annotation_layers" / "__init__.py",
+        submodule_search_locations=[str(ROOT / "mesh_annotation_layers")],
+    )
+    namespaced_addon = importlib.util.module_from_spec(spec)
+    sys.modules[package_name] = namespaced_addon
+    try:
+        spec.loader.exec_module(namespaced_addon)
+        assert namespaced_addon.preferences.ADDON_PACKAGE == package_name
+        assert (
+            namespaced_addon.preferences.MeshAnnotationPreferences.bl_idname
+            == package_name
+        )
+    finally:
+        for module_name in list(sys.modules):
+            if module_name == package_name or module_name.startswith(
+                f"{package_name}."
+            ):
+                del sys.modules[module_name]
 
 
 def create_grid_object():
@@ -91,10 +124,64 @@ def test_cache_reuse(obj):
         overlay.build_overlay_batches = original_builder
 
 
+def test_button_operators(obj):
+    settings = obj.mesh_annotations
+    overlay_state = settings.enable_overlay
+    assert bpy.ops.mesh.annotation_toggle_overlay() == {"FINISHED"}
+    assert settings.enable_overlay is not overlay_state
+    assert bpy.ops.mesh.annotation_toggle_overlay() == {"FINISHED"}
+    assert settings.enable_overlay is overlay_state
+
+    assert bpy.ops.mesh.annotation_toggle_solo() == {"FINISHED"}
+    assert settings.solo_active
+    assert bpy.ops.mesh.annotation_toggle_solo() == {"FINISHED"}
+    assert not settings.solo_active
+
+    layer = settings.face_layers[0]
+    visible = layer.is_visible
+    result = bpy.ops.mesh.annotation_toggle_layer_visibility(
+        element_type=FACE,
+        layer_id=layer.layer_id,
+    )
+    assert result == {"FINISHED"}
+    assert layer.is_visible is not visible
+
+
+def test_localization_modes_and_tooltips():
+    original_preferences = i18n.addon_preferences
+    original_locale = i18n.blender_locale
+    try:
+        i18n.addon_preferences = lambda: SimpleNamespace(language_display="ZH")
+        assert i18n.tr("Add Annotation Layer") == "新增标注图层"
+        assert (
+            operators.MESH_OT_annotation_layer_add.description(None, None)
+            == "为当前元素类型创建新的标注图层。"
+        )
+
+        i18n.addon_preferences = lambda: SimpleNamespace(language_display="EN")
+        assert i18n.tr("Add Annotation Layer") == "Add Annotation Layer"
+
+        i18n.addon_preferences = lambda: SimpleNamespace(language_display="AUTO")
+        i18n.blender_locale = lambda: "ja_JP"
+        assert i18n.language_mode() == "EN"
+        i18n.blender_locale = lambda: "zh_HANS"
+        assert i18n.language_mode() == "ZH"
+
+        items = i18n.language_items(None, None)
+        assert [item[0] for item in items] == ["AUTO", "EN", "ZH"]
+        assert i18n.ADDON_PACKAGE == addon.__package__
+    finally:
+        i18n.addon_preferences = original_preferences
+        i18n.blender_locale = original_locale
+
+
 def main():
+    test_extension_namespace_package_name()
     addon.register()
     try:
+        test_localization_modes_and_tooltips()
         obj, geometry, elapsed_ms = test_assignments_and_evaluated_geometry()
+        test_button_operators(obj)
         test_cache_reuse(obj)
         counts = {kind: len(records) for kind, records in geometry.items()}
         base_counts = (

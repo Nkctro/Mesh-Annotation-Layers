@@ -3,7 +3,7 @@
 import bpy
 
 from .constants import EDGE, ELEMENT_TYPES, FACE, VERTEX, element_spec
-from .i18n import tr
+from .i18n import addon_preferences, tr
 from .loops import element_labels
 from .model import (
     active_layer,
@@ -11,7 +11,6 @@ from .model import (
     get_layer_collection,
     infer_element_type_from_mode,
 )
-from .preferences import addon_preferences
 
 
 def draw_existing_layer_menu(layout, obj, element_type: str, use_loop: bool):
@@ -338,7 +337,14 @@ class MESH_UL_annotation_layers(bpy.types.UIList):
         if self.layout_type in {"DEFAULT", "COMPACT"}:
             row = layout.row(align=True)
             icon_id = "HIDE_OFF" if layer.is_visible else "HIDE_ON"
-            row.prop(layer, "is_visible", text="", emboss=False, icon=icon_id)
+            visibility = row.operator(
+                "mesh.annotation_toggle_layer_visibility",
+                text="",
+                emboss=False,
+                icon=icon_id,
+            )
+            visibility.element_type = layer.element_type
+            visibility.layer_id = layer.layer_id
             row.prop(layer, "color", text="")
             row.prop(layer, "name", text="", emboss=False)
         elif self.layout_type == "GRID":
@@ -376,19 +382,30 @@ class VIEW3D_PT_mesh_annotation(bpy.types.Panel):
         layout.use_property_decorate = False
         obj = context.object
         settings = obj.mesh_annotations
+
+        preferences = addon_preferences()
+        if preferences is not None:
+            language = layout.row(align=True)
+            language.prop(
+                preferences,
+                "language_display",
+                text=tr("Language"),
+                icon="WORLD",
+            )
+
         toolbar = layout.row(align=True)
-        toolbar.prop(
-            settings,
-            "enable_overlay",
+        toolbar.operator(
+            "mesh.annotation_toggle_overlay",
             text=tr('Overlay'),
-            toggle=True,
             icon="HIDE_OFF" if settings.enable_overlay else "HIDE_ON",
+            depress=settings.enable_overlay,
         )
-        toolbar.prop(
-            settings,
-            "solo_active",
+        solo_column = toolbar.row(align=True)
+        solo_column.enabled = settings.enable_overlay
+        solo_column.operator(
+            "mesh.annotation_toggle_solo",
             text=tr('Solo'),
-            toggle=True,
+            depress=settings.solo_active,
         )
 
         if context.mode == "EDIT_MESH":

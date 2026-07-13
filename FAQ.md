@@ -12,7 +12,7 @@
 **A:** Blender 4.2 and above. Earlier versions are not supported because the addon targets the Blender Extensions platform.
 
 ### Q: Can I change the add-on's language?
-**A:** Yes. Go to Edit > Preferences > Add-ons > Mesh Annotation Layers and switch the Language option to Auto, English, Chinese, or Both.
+**A:** Yes. Use the Language selector in the Mesh Annotation panel or the add-on preferences. Automatic follows Blender's interface language; unsupported languages fall back to English. English and Chinese can also be selected manually.
 
 ### Q: Does it work with Blender 4.2+?
 **A:** Yes, the addon is designed for Blender 4.2 and future releases in the 4.x line.
