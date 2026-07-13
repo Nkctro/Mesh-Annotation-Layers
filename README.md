@@ -8,19 +8,22 @@
 
 ### Overview
 
-**Mesh Annotation Layers** is a topology assistance and annotation addon for Blender. It allows you to add multiple colored overlay layers to mesh objects (faces, edges, vertices) in **Edit Mode**, helping you identify different regions, flow patterns, or modeling logic without modifying material or vertex color data.
+**Mesh Annotation Layers** is a topology assistance and annotation addon for Blender. Create and edit colored face, edge, and vertex layers in **Edit Mode**, then keep those guides visible while modeling, sculpting, or painting weights without modifying material or vertex color data.
 
 ### Features
 
 - **Multiple annotation layers** for vertices, edges, and faces with per-object storage
 - **Flexible assignments** including assign selected, assign loop, and one-click create-new-layer workflows
-- **Custom overlay styling** with per-layer colors plus controls for opacity, line width, vertex size, face offset, edge trimming, and backface visibility
+- **Custom overlay styling** with per-layer colors plus controls for opacity, line width, vertex size, independent face/edge/vertex offsets, edge trimming, and through-mesh visibility
 - **Selection utilities** to pick from selection, select layer elements, or clear/remove assignments quickly
 - **Optional propagation toggle** lets you decide if newly extruded or duplicated geometry should inherit existing annotations
 - **Viewport context menu tools** for seam marking and faster access to layer actions
 - **Bilingual interface** that can follow Blender, force English, force Chinese, or show both labels
 - **Non-destructive workflow** that leaves geometry, materials, and vertex colors untouched
 - **Persistent data** saved inside the .blend file alongside your meshes
+- **Cross-mode visibility** in Object, Weight Paint, Vertex Paint, Sculpt, and Texture Paint modes
+- **Compact type workspace** that shows one face/edge/vertex layer stack at a time and follows Edit Mode selection type
+- **Interaction-aware caching** that avoids rebuilding annotation geometry for ordinary paint strokes and throttles expensive evaluated updates while editing dense meshes
 
 ### Installation
 
@@ -57,9 +60,9 @@ This will create a ZIP file in the `dist/` folder that can be installed directly
 #### Accessing the Panel
 
 1. Select a mesh object
-2. Enter **Edit Mode** (Tab key)
-3. Open the **Sidebar** (N key)
-4. Navigate to the **Annotation** tab
+2. Open the **Sidebar** (N key)
+3. Navigate to the **Mesh Annotation** tab
+4. Enter **Edit Mode** when you need to create or change assignments; existing annotations remain visible in other modes
 
 #### Creating Layers
 
@@ -95,10 +98,13 @@ This will create a ZIP file in the `dist/` folder that can be installed directly
 
 #### Overlay Controls
 
+- Open the collapsed **Display** subpanel for detailed appearance controls
 - **Show Overlay** toggles annotations on or off globally
 - **Edge Thickness** controls overlay line width
 - **Edge Shortening** trims overlay lines closer to the middle of an edge
 - **Face Offset** lifts face overlays away from the surface to reduce z-fighting
+- **Edge Offset** lifts edge overlays along the evaluated surface normal
+- **Vertex Offset** lifts point markers along the evaluated surface normal
 - **Vertex Size** adjusts the size of vertex markers
 - **Overlay Opacity** sets a global transparency multiplier
 - **Show Through Mesh** decides whether overlays appear on backfaces
@@ -121,7 +127,7 @@ Open `Edit > Preferences > Add-ons > Mesh Annotation Layers` to configure:
 ### Technical Details
 
 - Compatible with Blender 4.2 and above
-- Works only in Edit Mode for mesh objects
+- Assignments are edited in Edit Mode; overlays also display in Object, Weight Paint, Vertex Paint, Sculpt, and Texture Paint modes
 - Annotations are stored per object
 - Uses GPU shader drawing for efficient overlay rendering
 - Does not modify mesh geometry, materials, or vertex colors
@@ -134,7 +140,7 @@ There are no default keyboard shortcuts, but you can add them in Blender's Keyma
 
 **Problem**: Overlays are not visible
 - **Solution**: Check that the layer visibility (eye icon) is enabled
-- **Solution**: Ensure you're in Edit Mode
+- **Solution**: Check that the main Overlay toggle is enabled
 - **Solution**: Adjust the opacity slider
 
 **Problem**: Can't assign elements to a layer
@@ -143,7 +149,7 @@ There are no default keyboard shortcuts, but you can add them in Blender's Keyma
 - **Solution**: Check that a layer is active (highlighted in the list)
 
 **Problem**: Addon doesn't appear in the sidebar
-- **Solution**: Make sure you're in Edit Mode with a mesh object selected
+- **Solution**: Make sure a mesh object is selected and the 3D View sidebar is open
 - **Solution**: Check that the addon is enabled in Preferences
 
 ### License
@@ -156,19 +162,22 @@ This addon is released under the GPL-3.0 license.
 
 ### 概述
 
-**Mesh Annotation Layers（网格标注层）** 是一个用于 Blender 的拓扑辅助与标注插件。它允许你在**编辑模式**下，为网格对象的面、边、顶点添加多个彩色叠加层，用以标识不同的区域、流向或建模逻辑，而不会改变材质或顶点颜色数据。
+**Mesh Annotation Layers（网格标注层）** 是一个用于 Blender 的拓扑辅助与标注插件。你可以在**编辑模式**中创建和调整面、边、点彩色图层，并在建模、雕刻或权重绘制时持续查看这些拓扑辅助标记，同时不改变材质或顶点颜色数据。
 
 ### 功能特性
 
 - **多图层标注**：针对顶点、边、面创建任意数量的图层，每个物体独立存储
 - **灵活分配**：支持“分配选中”、“分配循环”以及一键新建图层并完成分配
-- **叠加样式自定义**：提供颜色、透明度、线宽、点大小、面偏移、边截断、背面可见性等调节
+- **叠加样式自定义**：提供颜色、透明度、线宽、点大小、面/边/点独立偏移、边截断和穿透显示等调节
 - **快速工具**：可根据选择激活图层、选中整图层元素或快速清理分配
 - **可选继承开关**：控制挤出或复制产生的新几何是否继承原有标注
 - **视图菜单集成**：在 3D 视图右键菜单操作，可一键将面图层转换为 UV 缝
 - **双语界面**：支持自动、仅英文、仅中文或双语标签
 - **非破坏流程**：不会修改几何体、材质或顶点颜色数据
 - **持久化数据**：标注内容随 .blend 文件一并保存
+- **跨模式显示**：支持物体、权重绘制、顶点绘制、雕刻和纹理绘制模式
+- **紧凑类型工作区**：一次只显示面、边或点的一组图层，并与编辑模式的选择类型联动
+- **交互感知缓存**：普通绘制笔触不重建标注几何，密集网格编辑时限制昂贵的评估刷新频率
 
 ### 安装方法
 
@@ -203,9 +212,9 @@ python3 package.py
 #### 访问面板
 
 1. 选择一个网格对象
-2. 进入**编辑模式**（Tab 键）
-3. 打开**侧边栏**（N 键）
-4. 导航到 **Annotation（标注）** 选项卡
+2. 打开**侧边栏**（N 键）
+3. 导航到 **Mesh Annotation（网格标注）** 选项卡
+4. 需要创建或调整分配时进入**编辑模式**；已有标注可在其他模式中持续显示
 
 #### 创建图层
 
@@ -241,10 +250,13 @@ python3 package.py
 
 #### 叠加显示调整
 
+- 展开折叠的**显示设置**子面板可调整详细外观
 - **显示覆盖层**：总开关用于全局显示/隐藏标注
 - **线条粗细**：调整边线的阈值
 - **线条截断**：使线条更接近边的中点
 - **面偏移**：顺着表面法线提升叠加
+- **边偏移**：沿评估后表面法线抬高边标注
+- **点偏移**：沿评估后表面法线抬高点标记
 - **点大小**：控制顶点标识的大小
 - **覆盖透明度**：设置全局透明度倍率
 - **背面可见**：控制是否在背面显示标注
@@ -267,7 +279,7 @@ python3 package.py
 ### 技术细节
 
 - 兼容 Blender 4.2 及以上版本
-- 仅在网格对象的编辑模式下工作
+- 在编辑模式中调整分配；物体、权重绘制、顶点绘制、雕刻和纹理绘制模式也会显示标注
 - 标注按对象存储
 - 使用 GPU 着色器绘制实现高效的叠加渲染
 - 不修改网格几何体、材质或顶点颜色
@@ -280,7 +292,7 @@ python3 package.py
 
 **问题**：叠加层不可见
 - **解决方案**：检查图层可见性（眼睛图标）是否已启用
-- **解决方案**：确保你处于编辑模式
+- **解决方案**：检查顶部“显示标注”总开关是否启用
 - **解决方案**：调整不透明度滑块
 
 **问题**：无法将元素分配给图层
@@ -289,7 +301,7 @@ python3 package.py
 - **解决方案**：检查图层是否处于活动状态（在列表中高亮显示）
 
 **问题**：插件不出现在侧边栏中
-- **解决方案**：确保你在编辑模式下选择了网格对象
+- **解决方案**：确保已选择网格对象并打开 3D 视图侧边栏
 - **解决方案**：检查插件是否在偏好设置中启用
 
 ### 许可证

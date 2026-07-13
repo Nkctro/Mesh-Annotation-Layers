@@ -6,7 +6,7 @@
 2. **Open Panel**: Press `N` -> Click "Annotation" tab
 3. **Add Layer**: Click `+` button
 4. **Select Elements**: Select vertices/edges/faces
-5. **Assign**: Click "Assign Selected" to add the selection to the active layer
+5. **Assign**: Click "Add Selected" to add the selection to the active layer
 
 ## Common Workflows
 
@@ -124,14 +124,14 @@ Select elements that already belong to a layer -> Click "Pick From Selection"
 In face mode -> Use "Mark Seams (Layer)" or "Mark Seams (All)" to convert assignments to UV seams
 
 ### Adjust Overlay Display
-Use the overlay controls to tweak thickness, offsets, point size, opacity, and backface visibility
+Open the Display subpanel to tweak thickness, whole-edge shortening, independent face/edge/vertex offsets, point size, opacity, and through-mesh visibility
 
 ## Limitations
 
-- Only works in Edit Mode
+- Assignments can only be changed in Edit Mode
 - Only works with mesh objects
 - One element type per layer (can't mix vertices and faces in same layer)
-- Overlays only visible in Edit Mode
+- Overlays remain visible in Object, Weight Paint, Vertex Paint, Sculpt, and Texture Paint modes
 - Performance may decrease with very large meshes (100k+ faces)
 
 ## Troubleshooting Quick Fixes
@@ -140,7 +140,7 @@ Use the overlay controls to tweak thickness, offsets, point size, opacity, and b
 |---------|-----------|
 | Can't see overlays | Check eye icon is on, increase opacity |
 | Can't assign elements | Make sure you're in Edit Mode |
-| Panel missing | Press N, check you're in Edit Mode |
+| Panel missing | Press N and make sure a mesh object is active |
 | Wrong elements selected | Check active layer and element type |
 
 ## Advanced Usage
@@ -174,7 +174,10 @@ Mark UV seams and islands with different layers for reference
 Mark target edge flow before starting retopology work
 
 ### Sculpting
-Mark areas in Edit Mode before switching to Sculpt Mode
+Mark areas in Edit Mode, then keep the same guides visible in Sculpt Mode
+
+### Weight Painting
+Mark deformation regions or edge flow in Edit Mode, then use the guides while painting weights
 
 ### Modeling
 Mark different detail levels or regions for organized modeling

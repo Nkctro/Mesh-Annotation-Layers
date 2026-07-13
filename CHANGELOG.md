@@ -2,6 +2,37 @@
 
 All notable changes to the Mesh Annotation Layers addon will be documented in this file.
 
+# [Unreleased]
+
+### Added
+- Keep annotations visible in Object, Weight Paint, Vertex Paint, Sculpt, and Texture Paint modes; assignment tools remain safely limited to Edit Mode.
+- Added face/edge/vertex workspace tabs that synchronize Blender's mesh selection mode when editing.
+- Added a one-click action to enter Edit Mode from read-only annotation views.
+- Added a centralized translation catalog with safe named-parameter formatting.
+
+### Changed
+- Reorganized the sidebar around one active element type and moved display tuning into a collapsed child panel.
+- Batched all visible edges in a layer into one GPU draw call and preserved the overlay cache during weight strokes that cannot deform the evaluated mesh.
+- Removed per-row full-mesh layer counting from the layer list.
+- Changed defaults to disable through-mesh display, use 7 px edges and 10 px points, and offset faces, edges, and points by 0.0001.
+- Keep cached annotation geometry during vertex/texture paint strokes when paint data cannot drive deformation.
+- Reuse sparse JSON layer assignments during coordinate-only edits instead of rescanning every mesh element and custom-data stack.
+- Refresh evaluated overlays adaptively during mesh and sculpt interaction, prioritizing input responsiveness and scheduling a final redraw automatically.
+- Split the former single-file implementation into focused constants, localization,
+  model, evaluated-geometry, overlay, loop, property, operator, and UI modules.
+- Replaced mutable element metadata dictionaries with validated immutable element specifications.
+- Made registration transactional so partial Blender registration failures clean themselves up.
+- Package every Python module instead of assuming a single-file add-on.
+
+### Fixed
+- Map annotated source vertices to their actual Subdivision Surface descendants instead of relying on evaluated vertex ordering.
+- Resolve fallback vertex mappings from intersections of evaluated source-edge chains instead of nearest-point guesses.
+- Offset each evaluated edge endpoint with its own vertex normal so equal point/edge offsets remain exactly aligned on curved surfaces.
+- Apply edge shortening to the two ends of the complete subdivided source-edge chain, eliminating gaps at internal subdivision segments.
+- Ignore malformed serialized layer entries without breaking panel drawing or operators.
+- Removed a duplicated context-menu implementation that could diverge during maintenance.
+- Added repeatable source-contract and Blender integration smoke tests for future refactors.
+
 # [1.1.5] - 2025-11-02
 
 ### Fixed
