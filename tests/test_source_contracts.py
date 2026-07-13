@@ -111,6 +111,16 @@ class SourceContractsTest(unittest.TestCase):
         )
         self.assertLess(line_count, 100)
 
+    def test_overlay_color_does_not_depend_on_selection(self):
+        source = (PACKAGE / "overlay.py").read_text(encoding="utf-8")
+        self.assertNotIn('blend_set("ADDITIVE")', source)
+        self.assertNotIn('entry.get("selected")', source)
+
+    def test_undo_and_redo_have_explicit_cache_boundaries(self):
+        source = (PACKAGE / "overlay.py").read_text(encoding="utf-8")
+        for handler_name in ("undo_pre", "undo_post", "redo_pre", "redo_post"):
+            self.assertIn(f"bpy.app.handlers.{handler_name}", source)
+
 
 if __name__ == "__main__":
     unittest.main()

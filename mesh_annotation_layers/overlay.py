@@ -33,12 +33,18 @@ from .model import (
 
 _draw_handle = None
 _overlay_batch_cache = {}
-_overlay_topology_counts = {}
+_overlay_source_signatures = {}
 _overlay_refresh_timer_pending = False
 
 
 def invalidate_overlay_cache():
     _overlay_batch_cache.clear()
+
+
+def invalidate_overlay_state():
+    """Discard every derived value that may outlive Blender mesh history."""
+    invalidate_overlay_cache()
+    _overlay_source_signatures.clear()
 
 
 def mark_overlay_cache_dirty(obj=None):
@@ -80,6 +86,19 @@ def tag_view3d_redraw(context=None, invalidate_cache=True):
         for area in screen.areas:
             if area.type == "VIEW_3D":
                 area.tag_redraw()
+
+
+@persistent
+def annotation_history_pre(*_args):
+    """Never let a batch from the abandoned history state reach the viewport."""
+    invalidate_overlay_state()
+
+
+@persistent
+def annotation_history_post(*_args):
+    """Force annotation ownership to be read from the restored BMesh layers."""
+    invalidate_overlay_state()
+    tag_view3d_redraw(invalidate_cache=False)
 
 
 def _modifier_state_signature(obj: bpy.types.Object):
@@ -202,8 +221,11 @@ def build_overlay_batches(obj: bpy.types.Object, settings):
         bm.normal_update()
         cache_key = obj.as_pointer()
         topology_counts = (len(bm.verts), len(bm.edges), len(bm.faces))
-        sync_stack_mapping = _overlay_topology_counts.get(cache_key) != topology_counts
-        _overlay_topology_counts[cache_key] = topology_counts
+        source_signature = (mesh.as_pointer(), topology_counts)
+        sync_stack_mapping = (
+            _overlay_source_signatures.get(cache_key) != source_signature
+        )
+        _overlay_source_signatures[cache_key] = source_signature
         results = {etype: [] for etype in ELEMENT_TYPES}
         layer_states = {}
         source_filters = {}
@@ -288,7 +310,6 @@ def build_overlay_batches(obj: bpy.types.Object, settings):
                 for source_index, triangles_local, normal_local in geometry[element_type]:
                     if not (0 <= source_index < len(container)):
                         continue
-                    source_face = container[source_index]
                     top_layer = top_layers.get(source_index)
                     if top_layer is None:
                         continue
@@ -302,10 +323,9 @@ def build_overlay_batches(obj: bpy.types.Object, settings):
                         tuple(matrix @ coordinate + offset for coordinate in triangle)
                         for triangle in triangles_local
                     ]
-                    bucket_key = (top_layer, source_is_edit and bool(source_face.select))
-                    buckets[bucket_key].extend(triangles)
+                    buckets[top_layer].extend(triangles)
                 shader = gpu.shader.from_builtin("UNIFORM_COLOR")
-                for (layer_id, selected_flag), triangles in buckets.items():
+                for layer_id, triangles in buckets.items():
                     if not triangles:
                         continue
                     flat = [coordinate for triangle in triangles for coordinate in triangle]
@@ -316,7 +336,6 @@ def build_overlay_batches(obj: bpy.types.Object, settings):
                             "batch": batch,
                             "shader": shader,
                             "color": tuple(visible_layers[layer_id].color),
-                            "selected": selected_flag,
                         }
                     )
             elif element_type == EDGE:
@@ -338,9 +357,7 @@ def build_overlay_batches(obj: bpy.types.Object, settings):
                     )
 
                 for source_index, records in edge_groups.items():
-                    source_edge = container[source_index]
                     top_layer = top_layers[source_index]
-                    bucket_key = (top_layer, source_is_edit and bool(source_edge.select))
                     for chain in ordered_edge_chains(records):
                         segments = []
                         for p0_local, p1_local, normal0_local, normal1_local in chain:
@@ -360,9 +377,9 @@ def build_overlay_batches(obj: bpy.types.Object, settings):
                             )
                         if edge_trim < 0.0:
                             segments = trim_edge_chain(segments, -edge_trim)
-                        buckets[bucket_key].extend(segments)
+                        buckets[top_layer].extend(segments)
                 shader = gpu.shader.from_builtin("POLYLINE_UNIFORM_COLOR")
-                for (layer_id, selected_flag), segments in buckets.items():
+                for layer_id, segments in buckets.items():
                     if not segments:
                         continue
                     flat = [coordinate for segment in segments for coordinate in segment]
@@ -374,14 +391,12 @@ def build_overlay_batches(obj: bpy.types.Object, settings):
                             "shader": shader,
                             "segment_count": len(segments),
                             "color": tuple(visible_layers[layer_id].color),
-                            "selected": selected_flag,
                         }
                     )
             else:
                 for source_index, coordinate_local, normal_local in geometry[element_type]:
                     if not (0 <= source_index < len(container)):
                         continue
-                    source_vertex = container[source_index]
                     top_layer = top_layers.get(source_index)
                     if top_layer is None:
                         continue
@@ -391,10 +406,9 @@ def build_overlay_batches(obj: bpy.types.Object, settings):
                         else Vector((0.0, 0.0, 1.0))
                     )
                     coordinate = matrix @ coordinate_local + normal * vertex_offset
-                    bucket_key = (top_layer, source_is_edit and bool(source_vertex.select))
-                    buckets[bucket_key].append(coordinate)
+                    buckets[top_layer].append(coordinate)
                 shader = gpu.shader.from_builtin("POINT_UNIFORM_COLOR")
-                for (layer_id, selected_flag), coordinates in buckets.items():
+                for layer_id, coordinates in buckets.items():
                     if not coordinates:
                         continue
                     batch = batch_for_shader(shader, "POINTS", {"pos": coordinates})
@@ -404,7 +418,6 @@ def build_overlay_batches(obj: bpy.types.Object, settings):
                             "batch": batch,
                             "shader": shader,
                             "color": tuple(visible_layers[layer_id].color),
-                            "selected": selected_flag,
                         }
                     )
         return results
@@ -468,7 +481,6 @@ def draw_overlay():
         return
     depth_mode = "ALWAYS" if show_backfaces else "LESS_EQUAL"
     gpu.state.blend_set("ALPHA")
-    current_blend = "ALPHA"
     gpu.state.depth_mask_set(False)
     gpu.state.depth_test_set(depth_mode)
     try:
@@ -488,21 +500,6 @@ def draw_overlay():
                     base_color[2],
                     base_color[3] * alpha_mult,
                 )
-                selected_flag = bool(entry.get("selected"))
-                if selected_flag:
-                    boost = 0.2
-                    color = (
-                        min(1.0, color[0] + boost),
-                        min(1.0, color[1] + boost),
-                        min(1.0, color[2] + boost),
-                        min(1.0, max(color[3], alpha_mult * 0.85)),
-                    )
-                    target_blend = "ADDITIVE"
-                else:
-                    target_blend = "ALPHA"
-                if target_blend != current_blend:
-                    gpu.state.blend_set(target_blend)
-                    current_blend = target_blend
                 if kind == "triangles":
                     shader = entry["shader"]
                     batch = entry["batch"]
@@ -525,8 +522,6 @@ def draw_overlay():
                     polyline_shader.uniform_float("color", color)
                     entry["batch"].draw(polyline_shader)
     finally:
-        if current_blend != "ALPHA":
-            gpu.state.blend_set("ALPHA")
         gpu.state.depth_test_set("LESS_EQUAL")
         gpu.state.depth_mask_set(True)
         gpu.state.blend_set("NONE")
@@ -549,13 +544,18 @@ def unregister_draw_handler():
 
 def register():
     global _overlay_refresh_timer_pending
-    invalidate_overlay_cache()
-    _overlay_topology_counts.clear()
+    invalidate_overlay_state()
     if bpy.app.timers.is_registered(_overlay_refresh_timer):
         bpy.app.timers.unregister(_overlay_refresh_timer)
     _overlay_refresh_timer_pending = False
     if annotation_depsgraph_update_post not in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.append(annotation_depsgraph_update_post)
+    for handlers in (bpy.app.handlers.undo_pre, bpy.app.handlers.redo_pre):
+        if annotation_history_pre not in handlers:
+            handlers.append(annotation_history_pre)
+    for handlers in (bpy.app.handlers.undo_post, bpy.app.handlers.redo_post):
+        if annotation_history_post not in handlers:
+            handlers.append(annotation_history_post)
     register_draw_handler()
 
 
@@ -564,8 +564,13 @@ def unregister():
     unregister_draw_handler()
     if annotation_depsgraph_update_post in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.remove(annotation_depsgraph_update_post)
-    invalidate_overlay_cache()
-    _overlay_topology_counts.clear()
+    for handlers in (bpy.app.handlers.undo_pre, bpy.app.handlers.redo_pre):
+        if annotation_history_pre in handlers:
+            handlers.remove(annotation_history_pre)
+    for handlers in (bpy.app.handlers.undo_post, bpy.app.handlers.redo_post):
+        if annotation_history_post in handlers:
+            handlers.remove(annotation_history_post)
+    invalidate_overlay_state()
     if bpy.app.timers.is_registered(_overlay_refresh_timer):
         bpy.app.timers.unregister(_overlay_refresh_timer)
     _overlay_refresh_timer_pending = False

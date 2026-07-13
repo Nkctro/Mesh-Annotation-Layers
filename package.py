@@ -32,7 +32,7 @@ def get_addon_version():
 
 def normalize_version_base(version_str: str) -> str:
     """Strip pre-release/build suffixes (e.g. 1.2.3-alpha+1 -> 1.2.3)."""
-    return re.split(r"[-+]", version_str, 1)[0]
+    return re.split(r"[-+]", version_str, maxsplit=1)[0]
 
 
 def next_beta_build_number(state_path: Path, base_version: str) -> int:

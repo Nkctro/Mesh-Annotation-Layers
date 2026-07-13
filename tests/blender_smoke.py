@@ -5,6 +5,7 @@ import os
 import sys
 import time
 import types
+from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -19,6 +20,20 @@ GRID_SEGMENTS = int(os.environ.get("MAL_GRID_SEGMENTS", "28"))
 import mesh_annotation_layers as addon
 from mesh_annotation_layers import evaluated_geometry, i18n, model, operators, overlay
 from mesh_annotation_layers.constants import EDGE, FACE, VERTEX
+
+
+@contextmanager
+def overlay_gpu_stub():
+    """Keep geometry tests runnable when Blender has no background GPU context."""
+    original_shader_builder = overlay.gpu.shader.from_builtin
+    original_batch_builder = overlay.batch_for_shader
+    try:
+        overlay.gpu.shader.from_builtin = lambda _name: object()
+        overlay.batch_for_shader = lambda *_args, **_kwargs: object()
+        yield
+    finally:
+        overlay.gpu.shader.from_builtin = original_shader_builder
+        overlay.batch_for_shader = original_batch_builder
 
 
 def test_extension_namespace_package_name():
@@ -124,6 +139,68 @@ def test_cache_reuse(obj):
         overlay.build_overlay_batches = original_builder
 
 
+def test_overlay_color_is_selection_independent(obj):
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode="EDIT")
+    try:
+        bm = bmesh.from_edit_mesh(obj.data)
+        bm.faces.ensure_lookup_table()
+        for face in bm.faces:
+            face.select = False
+        bm.faces[10].select = True
+        bmesh.update_edit_mesh(obj.data, loop_triangles=False, destructive=False)
+
+        overlay.invalidate_overlay_state()
+        with overlay_gpu_stub():
+            batches = overlay.build_overlay_batches(obj, obj.mesh_annotations)
+        entries = [
+            entry
+            for element_type in (FACE, EDGE, VERTEX)
+            for entry in batches[element_type]
+        ]
+        assert entries
+        assert all("selected" not in entry for entry in entries)
+    finally:
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+
+def test_history_resyncs_bmesh_ownership(obj):
+    settings = obj.mesh_annotations
+    layer_id = settings.face_layers[0].layer_id
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode="EDIT")
+    try:
+        with overlay_gpu_stub():
+            overlay.invalidate_overlay_state()
+            overlay.build_overlay_batches(obj, settings)
+
+            bm = bmesh.from_edit_mesh(obj.data)
+            bm.faces.ensure_lookup_table()
+            int_layer, stack_layer = model.ensure_annotation_layers(bm, FACE)
+            bm.faces[10][int_layer] = -1
+            bm.faces[10][stack_layer] = b""
+            bm.faces[11][int_layer] = layer_id
+            bm.faces[11][stack_layer] = model.encode_layers([layer_id])
+            bmesh.update_edit_mesh(obj.data, loop_triangles=False, destructive=False)
+
+            # Undo restores BMesh custom data independently of Python's derived
+            # caches. The history handler must make that BMesh data authoritative.
+            overlay.annotation_history_post()
+            overlay.build_overlay_batches(obj, settings)
+        mapping = model.load_element_layers(settings, FACE)
+        assert "10" not in mapping
+        assert mapping["11"] == [layer_id]
+    finally:
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+
+def test_history_handlers_registered():
+    for handlers in (bpy.app.handlers.undo_pre, bpy.app.handlers.redo_pre):
+        assert overlay.annotation_history_pre in handlers
+    for handlers in (bpy.app.handlers.undo_post, bpy.app.handlers.redo_post):
+        assert overlay.annotation_history_post in handlers
+
+
 def test_button_operators(obj):
     settings = obj.mesh_annotations
     overlay_state = settings.enable_overlay
@@ -179,10 +256,13 @@ def main():
     test_extension_namespace_package_name()
     addon.register()
     try:
+        test_history_handlers_registered()
         test_localization_modes_and_tooltips()
         obj, geometry, elapsed_ms = test_assignments_and_evaluated_geometry()
         test_button_operators(obj)
         test_cache_reuse(obj)
+        test_overlay_color_is_selection_independent(obj)
+        test_history_resyncs_bmesh_ownership(obj)
         counts = {kind: len(records) for kind, records in geometry.items()}
         base_counts = (
             len(obj.data.vertices),
