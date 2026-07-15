@@ -20,7 +20,6 @@ def collect_face_loop_faces(context, obj, bm, settings):
     if len(selected_faces) < 2:
         msg = tr('Select at least two faces to define the loop')
         return set(), msg
-    selected_set = set(selected_faces)
     required_indices = {face.index for face in selected_faces}
     loop_candidates = []
     processed_edges = set()
@@ -33,7 +32,9 @@ def collect_face_loop_faces(context, obj, bm, settings):
         loop.add(other)
         return loop
 
-    for face in selected_faces:
+    # Every valid result must pass through the first selected face. Seeding from
+    # every selected face repeats the same full loop walks on large selections.
+    for face in selected_faces[:1]:
         if len(face.verts) != 4:
             continue
         for edge in face.edges:

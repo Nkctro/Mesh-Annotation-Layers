@@ -73,7 +73,11 @@
 ## Performance Questions
 
 ### Q: Will this slow down Blender?
-**A:** For normal meshes (under 50k faces), performance impact is minimal. Very large meshes (100k+ faces) with many layers may see some slowdown in the viewport.
+**A:** Normal redraws reuse GPU batches and do not rescan the mesh. A first build
+or a real geometry change still scales with the amount of visible annotation and
+evaluated modifier geometry. Very dense overlays on 100k+ elements can therefore
+take noticeable time to refresh, but unrelated scene edits and ordinary object
+movement do not rebuild local-space batches.
 
 ### Q: How many layers can I create?
 **A:** Technically unlimited, but for performance reasons, it's recommended to use only the layers you actually need (typically 5-20 layers is plenty).

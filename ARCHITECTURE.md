@@ -66,12 +66,18 @@ ends of a complete source-edge chain, not to every subdivision segment.
 
 ## Cache policy
 
-The overlay cache is keyed by object identity and includes modifier state,
-display settings, topology counts, and build duration.
+The runtime uses bounded, weighted caches keyed by Blender object or settings
+identity. Decoded annotation mappings, usage counts, local evaluated geometry,
+and GPU batches have separate lifetimes so a style-only change does not force
+source-to-evaluated remapping.
 
-- Normal redraws reuse existing GPU batches.
-- Geometry and relevant modifier changes mark the object dirty.
-- Coordinate edits use an adaptive rebuild interval to preserve input response.
+- Normal redraws reuse existing GPU batches without rescanning modifier RNA.
+- Dependency-graph updates dirty only caches that depend on the updated Blender ID.
+- Face, point, and default edge batches stay in local coordinates, so ordinary
+  object transforms are applied at draw time.
+- Mapping fallbacks calculate only the annotated element kinds and source
+  neighbourhoods required by the current overlay.
+- Coordinate edits use a build-cost-aware interval to bound main-thread work.
 - Vertex/texture paint data updates reuse geometry when paint cannot deform it.
 - Weight paint reuses geometry only when no visible modifier consumes weights.
 - A timer schedules the final redraw after throttled interaction.

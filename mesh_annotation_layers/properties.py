@@ -4,7 +4,7 @@ import bpy
 
 from .constants import EDGE, FACE, VERTEX
 from .model import active_layer
-from .overlay import tag_view3d_redraw
+from .overlay import tag_surface_offset_redraw, tag_view3d_redraw
 
 
 class MeshAnnotationLayer(bpy.types.PropertyGroup):
@@ -16,7 +16,7 @@ class MeshAnnotationLayer(bpy.types.PropertyGroup):
         min=0.0,
         max=1.0,
         default=(0.8, 0.3, 0.3, 1.0),
-        update=lambda self, context: tag_view3d_redraw(context),
+        update=lambda self, context: tag_view3d_redraw(context, invalidate_cache=False),
     )
     layer_id: bpy.props.IntProperty()
     element_type: bpy.props.EnumProperty(
@@ -32,7 +32,9 @@ class MeshAnnotationLayer(bpy.types.PropertyGroup):
     is_visible: bpy.props.BoolProperty(
         name="Visible",
         default=True,
-        update=lambda self, context: tag_view3d_redraw(context),
+        update=lambda self, context: tag_view3d_redraw(
+            context, invalidate_geometry=False
+        ),
     )
 
 
@@ -40,12 +42,14 @@ class MeshAnnotationSettings(bpy.types.PropertyGroup):
     enable_overlay: bpy.props.BoolProperty(
         name="Show Overlay",
         default=True,
-        update=lambda self, context: tag_view3d_redraw(context),
+        update=lambda self, context: tag_view3d_redraw(context, invalidate_cache=False),
     )
     solo_active: bpy.props.BoolProperty(
         name="Solo Active Layer",
         default=False,
-        update=lambda self, context: tag_view3d_redraw(context),
+        update=lambda self, context: tag_view3d_redraw(
+            context, invalidate_geometry=False
+        ),
     )
     debug_output: bpy.props.BoolProperty(name="Debug Output", default=False)
     ui_element_type: bpy.props.EnumProperty(
@@ -89,7 +93,9 @@ class MeshAnnotationSettings(bpy.types.PropertyGroup):
         default=0.0,
         step=0.01,
         precision=3,
-        update=lambda self, context: tag_view3d_redraw(context),
+        update=lambda self, context: tag_view3d_redraw(
+            context, invalidate_geometry=False
+        ),
     )
     overlay_face_offset: bpy.props.FloatProperty(
         name="Face Offset",
@@ -99,7 +105,7 @@ class MeshAnnotationSettings(bpy.types.PropertyGroup):
         default=0.0001,
         step=0.0001,
         precision=4,
-        update=lambda self, context: tag_view3d_redraw(context),
+        update=lambda self, context: tag_surface_offset_redraw(context),
     )
     overlay_edge_offset: bpy.props.FloatProperty(
         name="Edge Offset",
@@ -109,7 +115,9 @@ class MeshAnnotationSettings(bpy.types.PropertyGroup):
         default=0.0001,
         step=0.0001,
         precision=4,
-        update=lambda self, context: tag_view3d_redraw(context),
+        update=lambda self, context: tag_view3d_redraw(
+            context, invalidate_geometry=False
+        ),
     )
     overlay_vertex_offset: bpy.props.FloatProperty(
         name="Vertex Offset",
@@ -119,7 +127,7 @@ class MeshAnnotationSettings(bpy.types.PropertyGroup):
         default=0.0001,
         step=0.0001,
         precision=4,
-        update=lambda self, context: tag_view3d_redraw(context),
+        update=lambda self, context: tag_surface_offset_redraw(context),
     )
 
     overlay_alpha_multiplier: bpy.props.FloatProperty(

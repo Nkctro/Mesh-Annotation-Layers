@@ -13,6 +13,21 @@ All notable changes to the Mesh Annotation Layers addon will be documented in th
   icon-only layer controls and viewport overlay toggles.
 
 ### Changed
+- Scoped dependency-graph invalidation to objects and modifier dependencies that
+  can actually affect a cached overlay, eliminating rebuilds caused by unrelated
+  scene edits.
+- Made evaluated fallback mapping demand-driven so face-only overlays no longer
+  calculate edge and vertex provenance, and sparse edge/vertex mapping considers
+  only the annotated source neighbourhood.
+- Added bounded LRU caches for decoded annotation data, layer usage counts,
+  local evaluated geometry, and GPU batches; large entries are weighted so
+  switching among dense meshes cannot grow memory without limit.
+- Draw face, point, and default untrimmed edge batches from local coordinates,
+  moving object transforms and surface offsets to the GPU where possible.
+- Reuse decoded mappings and update only changed BMesh custom-data elements for
+  assignment and removal operations.
+- Debounce expensive interactive overlay rebuilds according to measured build
+  cost while preserving a final idle redraw.
 - Reorganized the sidebar around one active element type and moved display tuning into a collapsed child panel.
 - Batched all visible edges in a layer into one GPU draw call and preserved the overlay cache during weight strokes that cannot deform the evaluated mesh.
 - Removed per-row full-mesh layer counting from the layer list.

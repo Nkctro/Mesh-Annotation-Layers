@@ -3,12 +3,65 @@
 import colorsys
 import json
 import random
-from collections import Counter
+from collections import Counter, OrderedDict
 
 import bmesh
 import bpy
 
 from .constants import EDGE, ELEMENT_TYPES, FACE, VERTEX, element_spec
+
+
+_ELEMENT_LAYERS_CACHE = OrderedDict()
+_ELEMENT_LAYERS_CACHE_LIMIT = 96
+_ELEMENT_LAYERS_VALUE_LIMIT = 300_000
+_BMESH_SYNC_SIGNATURES = OrderedDict()
+_BMESH_SYNC_CACHE_LIMIT = 96
+
+
+def _settings_cache_pointer(settings) -> int:
+    try:
+        return int(settings.as_pointer())
+    except (AttributeError, ReferenceError, TypeError):
+        return id(settings)
+
+
+def _element_layers_cache_key(settings, element_type: str):
+    return _settings_cache_pointer(settings), element_type
+
+
+def _cache_element_layers(settings, element_type: str, data_str: str, mapping):
+    key = _element_layers_cache_key(settings, element_type)
+    _ELEMENT_LAYERS_CACHE[key] = {
+        "data": data_str,
+        "mapping": mapping,
+        "counts": None,
+        "value_count": len(mapping) + sum(len(layers) for layers in mapping.values()),
+    }
+    _ELEMENT_LAYERS_CACHE.move_to_end(key)
+    while (
+        len(_ELEMENT_LAYERS_CACHE) > _ELEMENT_LAYERS_CACHE_LIMIT
+        or len(_ELEMENT_LAYERS_CACHE) > 1
+        and sum(
+            entry["value_count"] for entry in _ELEMENT_LAYERS_CACHE.values()
+        )
+        > _ELEMENT_LAYERS_VALUE_LIMIT
+    ):
+        _ELEMENT_LAYERS_CACHE.popitem(last=False)
+    return mapping
+
+
+def invalidate_element_layers_cache(settings=None, element_type=None):
+    """Discard decoded annotation data without touching Blender-owned properties."""
+    if settings is None:
+        _ELEMENT_LAYERS_CACHE.clear()
+        _BMESH_SYNC_SIGNATURES.clear()
+        return
+    settings_pointer = _settings_cache_pointer(settings)
+    for key in list(_ELEMENT_LAYERS_CACHE):
+        if key[0] != settings_pointer:
+            continue
+        if element_type is None or key[1] == element_type:
+            _ELEMENT_LAYERS_CACHE.pop(key, None)
 
 
 def debug_log(settings, *message):
@@ -50,11 +103,13 @@ def apply_layer_order_to_mapping(obj: bpy.types.Object, element_type: str) -> bo
         return False
     order_lookup = layer_order_map(settings, element_type)
     changed = False
+    changed_indices = set()
     for key, layers in list(mapping.items()):
         normalized = normalize_layer_ids(layers, order_lookup)
         if normalized != layers:
             mapping[key] = normalized
             changed = True
+            changed_indices.add(int(key))
     if not changed:
         return False
     mesh = obj.data
@@ -62,14 +117,30 @@ def apply_layer_order_to_mapping(obj: bpy.types.Object, element_type: str) -> bo
         bm = bmesh.from_edit_mesh(mesh)
         int_layer, stack_layer = ensure_annotation_layers(bm, element_type)
         ensure_lookup_tables(bm, element_type)
-        sync_mapping_to_bmesh(bm, int_layer, stack_layer, mapping, element_type)
+        sync_mapping_to_bmesh(
+            bm,
+            int_layer,
+            stack_layer,
+            mapping,
+            element_type,
+            changed_indices,
+        )
+        mark_bmesh_mapping_synchronized(mesh, bm, element_type)
         bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
     else:
         bm = bmesh.new()
         bm.from_mesh(mesh)
         int_layer, stack_layer = ensure_annotation_layers(bm, element_type)
         ensure_lookup_tables(bm, element_type)
-        sync_mapping_to_bmesh(bm, int_layer, stack_layer, mapping, element_type)
+        sync_mapping_to_bmesh(
+            bm,
+            int_layer,
+            stack_layer,
+            mapping,
+            element_type,
+            changed_indices,
+        )
+        mark_bmesh_mapping_synchronized(mesh, bm, element_type)
         bm.to_mesh(mesh)
         mesh.update()
         bm.free()
@@ -124,15 +195,20 @@ def load_element_layers(settings, element_type: str):
         return {}
     data_str = getattr(settings, _data_property_name(element_type), "")
     if not data_str:
-        return {}
+        return _cache_element_layers(settings, element_type, data_str, {})
+    cache_key = _element_layers_cache_key(settings, element_type)
+    cached = _ELEMENT_LAYERS_CACHE.get(cache_key)
+    if cached is not None and cached["data"] == data_str:
+        _ELEMENT_LAYERS_CACHE.move_to_end(cache_key)
+        return cached["mapping"]
     try:
         raw = json.loads(data_str)
     except (json.JSONDecodeError, TypeError):
         debug_log(settings, f"Ignored invalid {element_type} annotation JSON")
-        return {}
+        return _cache_element_layers(settings, element_type, data_str, {})
     if not isinstance(raw, dict):
         debug_log(settings, f"Ignored non-object {element_type} annotation data")
-        return {}
+        return _cache_element_layers(settings, element_type, data_str, {})
 
     mapping = {}
     for raw_index, raw_layers in raw.items():
@@ -142,25 +218,57 @@ def load_element_layers(settings, element_type: str):
             continue
         if index < 0 or not isinstance(raw_layers, (list, tuple)):
             continue
+        if len(raw_layers) == 1:
+            try:
+                layer_id = int(raw_layers[0])
+            except (TypeError, ValueError):
+                continue
+            if layer_id > 0:
+                mapping[str(index)] = [layer_id]
+            continue
         layer_ids = []
+        seen_layer_ids = set()
         for raw_layer_id in raw_layers:
             try:
                 layer_id = int(raw_layer_id)
             except (TypeError, ValueError):
                 continue
-            if layer_id > 0:
+            if layer_id > 0 and layer_id not in seen_layer_ids:
+                seen_layer_ids.add(layer_id)
                 layer_ids.append(layer_id)
-        layer_ids = normalize_layer_ids(layer_ids)
         if layer_ids:
             mapping[str(index)] = layer_ids
-    return mapping
+    return _cache_element_layers(settings, element_type, data_str, mapping)
 
 
 def save_element_layers(settings, element_type: str, mapping):
     if settings is None:
         return
     cleaned = {str(k): [int(v) for v in values] for k, values in mapping.items() if values}
-    setattr(settings, _data_property_name(element_type), json.dumps(cleaned))
+    data_str = json.dumps(cleaned, separators=(",", ":"))
+    setattr(settings, _data_property_name(element_type), data_str)
+    _cache_element_layers(settings, element_type, data_str, cleaned)
+
+
+def element_layer_counts(settings, element_type: str):
+    """Return cached per-layer usage counts for one annotation element kind."""
+    if settings is None:
+        return Counter()
+    data_str = getattr(settings, _data_property_name(element_type), "")
+    cache_key = _element_layers_cache_key(settings, element_type)
+    cached = _ELEMENT_LAYERS_CACHE.get(cache_key)
+    if cached is None or cached["data"] != data_str:
+        load_element_layers(settings, element_type)
+        cached = _ELEMENT_LAYERS_CACHE.get(cache_key)
+    if cached is None:
+        return Counter()
+    _ELEMENT_LAYERS_CACHE.move_to_end(cache_key)
+    if cached["counts"] is None:
+        counts = Counter()
+        for layers in cached["mapping"].values():
+            counts.update(layers)
+        cached["counts"] = counts
+    return cached["counts"]
 
 
 def get_layers_for_index(mapping, element_index: int):
@@ -180,6 +288,20 @@ def prune_mapping_to_indices(mapping, valid_indices):
     valid = set(valid_indices)
     for key in list(mapping.keys()):
         if int(key) not in valid:
+            del mapping[key]
+            removed = True
+    return removed
+
+
+def prune_mapping_to_index_count(mapping, element_count: int):
+    """Fast path for Blender element sequences whose indices are contiguous."""
+    removed = False
+    for key in list(mapping):
+        try:
+            index = int(key)
+        except (TypeError, ValueError):
+            index = -1
+        if not (0 <= index < element_count):
             del mapping[key]
             removed = True
     return removed
@@ -248,9 +370,47 @@ def merge_stack_layer_into_mapping(mapping, bm, stack_layer, element_type: str):
     return changed
 
 
-def sync_mapping_to_bmesh(bm, int_layer, stack_layer, mapping, element_type: str):
+def _bmesh_sync_key(mesh, element_type: str):
+    return mesh.as_pointer(), element_type
+
+
+def _bmesh_topology_signature(bm):
+    return len(bm.verts), len(bm.edges), len(bm.faces)
+
+
+def mark_bmesh_mapping_synchronized(mesh, bm, element_type: str):
+    key = _bmesh_sync_key(mesh, element_type)
+    _BMESH_SYNC_SIGNATURES[key] = _bmesh_topology_signature(bm)
+    _BMESH_SYNC_SIGNATURES.move_to_end(key)
+    while len(_BMESH_SYNC_SIGNATURES) > _BMESH_SYNC_CACHE_LIMIT:
+        _BMESH_SYNC_SIGNATURES.popitem(last=False)
+
+
+def merge_stack_layer_if_needed(mapping, mesh, bm, stack_layer, element_type: str):
+    """Reconcile durable JSON only after load, history, or topology-size changes."""
+    key = _bmesh_sync_key(mesh, element_type)
+    signature = _bmesh_topology_signature(bm)
+    if _BMESH_SYNC_SIGNATURES.get(key) == signature:
+        _BMESH_SYNC_SIGNATURES.move_to_end(key)
+        return False
+    changed = merge_stack_layer_into_mapping(mapping, bm, stack_layer, element_type)
+    mark_bmesh_mapping_synchronized(mesh, bm, element_type)
+    return changed
+
+
+def sync_mapping_to_bmesh(
+    bm, int_layer, stack_layer, mapping, element_type: str, element_indices=None
+):
     container = element_container(bm, element_type)
-    for elem in container:
+    if element_indices is None:
+        elements = container
+    else:
+        elements = (
+            container[index]
+            for index in element_indices
+            if 0 <= index < len(container)
+        )
+    for elem in elements:
         layers = mapping.get(str(elem.index), [])
         elem[int_layer] = layers[-1] if layers else -1
         elem[stack_layer] = encode_layers(layers)
@@ -316,14 +476,13 @@ def assign_elements_to_layer(
         int_layer, stack_layer = ensure_annotation_layers(bm, element_type)
         ensure_lookup_tables(bm, element_type)
         container = element_container(bm, element_type)
-        valid_indices = {elem.index for elem in container}
-        if prune_mapping_to_indices(mapping, valid_indices):
+        if prune_mapping_to_index_count(mapping, len(container)):
             save_element_layers(settings, element_type, mapping)
-        merge_stack_layer_into_mapping(mapping, bm, stack_layer, element_type)
+        merge_stack_layer_if_needed(mapping, mesh, bm, stack_layer, element_type)
         if element_indices is None:
             targets = [elem for elem in container if elem.select]
         else:
-            targets = [container[i] for i in element_indices if i < len(container)]
+            targets = [container[i] for i in element_indices if 0 <= i < len(container)]
         if not targets:
             debug_log(settings, "Assign aborted: no selection in edit mode")
             return False
@@ -335,7 +494,15 @@ def assign_elements_to_layer(
             layers.append(layer_id)
             layers = normalize_layer_ids(layers, order_lookup)
             set_layers_for_index(mapping, idx, layers)
-        sync_mapping_to_bmesh(bm, int_layer, stack_layer, mapping, element_type)
+        sync_mapping_to_bmesh(
+            bm,
+            int_layer,
+            stack_layer,
+            mapping,
+            element_type,
+            {elem.index for elem in targets},
+        )
+        mark_bmesh_mapping_synchronized(mesh, bm, element_type)
         bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
         save_element_layers(settings, element_type, mapping)
         debug_log(settings, f"Assign edit success: {len(targets)} elements")
@@ -345,13 +512,13 @@ def assign_elements_to_layer(
     int_layer, stack_layer = ensure_annotation_layers(bm, element_type)
     ensure_lookup_tables(bm, element_type)
     container = element_container(bm, element_type)
-    valid_indices = {elem.index for elem in container}
-    if prune_mapping_to_indices(mapping, valid_indices):
+    element_count = len(container)
+    if prune_mapping_to_index_count(mapping, element_count):
         save_element_layers(settings, element_type, mapping)
-    merge_stack_layer_into_mapping(mapping, bm, stack_layer, element_type)
+    merge_stack_layer_if_needed(mapping, mesh, bm, stack_layer, element_type)
     if element_indices is None:
-        element_indices = list(valid_indices)
-    element_indices = [idx for idx in element_indices if idx in valid_indices]
+        element_indices = range(element_count)
+    element_indices = [idx for idx in element_indices if 0 <= idx < element_count]
     if not element_indices:
         bm.free()
         debug_log(settings, "Assign aborted: no indices in object mode")
@@ -363,7 +530,15 @@ def assign_elements_to_layer(
         layers.append(layer_id)
         layers = normalize_layer_ids(layers, order_lookup)
         set_layers_for_index(mapping, idx, layers)
-    sync_mapping_to_bmesh(bm, int_layer, stack_layer, mapping, element_type)
+    sync_mapping_to_bmesh(
+        bm,
+        int_layer,
+        stack_layer,
+        mapping,
+        element_type,
+        element_indices,
+    )
+    mark_bmesh_mapping_synchronized(mesh, bm, element_type)
     bm.to_mesh(mesh)
     mesh.update()
     save_element_layers(settings, element_type, mapping)
@@ -393,15 +568,18 @@ def clear_elements_from_layer(
         int_layer, stack_layer = ensure_annotation_layers(bm, element_type)
         ensure_lookup_tables(bm, element_type)
         container = element_container(bm, element_type)
-        valid_indices = {elem.index for elem in container}
-        if prune_mapping_to_indices(mapping, valid_indices):
+        if prune_mapping_to_index_count(mapping, len(container)):
             save_element_layers(settings, element_type, mapping)
-        mapping_changed = merge_stack_layer_into_mapping(mapping, bm, stack_layer, element_type)
+        mapping_changed = merge_stack_layer_if_needed(
+            mapping, mesh, bm, stack_layer, element_type
+        )
         targets = container if not only_selected else [elem for elem in container if elem.select]
         assignment_changed = False
+        changed_indices = set()
         for elem in targets:
             idx = elem.index
             layers = normalize_layer_ids(get_layers_for_index(mapping, idx), order_lookup)
+            original_layers = tuple(layers)
             if layer_id == -1:
                 if mode == "TOP":
                     if layers:
@@ -423,8 +601,18 @@ def clear_elements_from_layer(
                     assignment_changed = True
             layers = normalize_layer_ids(layers, order_lookup)
             set_layers_for_index(mapping, idx, layers)
+            if tuple(layers) != original_layers:
+                changed_indices.add(idx)
         if assignment_changed:
-            sync_mapping_to_bmesh(bm, int_layer, stack_layer, mapping, element_type)
+            sync_mapping_to_bmesh(
+                bm,
+                int_layer,
+                stack_layer,
+                mapping,
+                element_type,
+                changed_indices,
+            )
+            mark_bmesh_mapping_synchronized(mesh, bm, element_type)
         if mapping_changed or assignment_changed:
             save_element_layers(settings, element_type, mapping)
         bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
@@ -439,14 +627,17 @@ def clear_elements_from_layer(
     int_layer, stack_layer = ensure_annotation_layers(bm, element_type)
     ensure_lookup_tables(bm, element_type)
     container = element_container(bm, element_type)
-    valid_indices = {elem.index for elem in container}
-    if prune_mapping_to_indices(mapping, valid_indices):
+    if prune_mapping_to_index_count(mapping, len(container)):
         save_element_layers(settings, element_type, mapping)
-    mapping_changed = merge_stack_layer_into_mapping(mapping, bm, stack_layer, element_type)
+    mapping_changed = merge_stack_layer_if_needed(
+        mapping, mesh, bm, stack_layer, element_type
+    )
     assignment_changed = False
+    changed_indices = set()
     for elem in container:
         idx = elem.index
         layers = normalize_layer_ids(get_layers_for_index(mapping, idx), order_lookup)
+        original_layers = tuple(layers)
         if layer_id == -1:
             if mode == "TOP":
                 if layers:
@@ -466,8 +657,18 @@ def clear_elements_from_layer(
             assignment_changed = True
         layers = normalize_layer_ids(layers, order_lookup)
         set_layers_for_index(mapping, idx, layers)
+        if tuple(layers) != original_layers:
+            changed_indices.add(idx)
     if assignment_changed:
-        sync_mapping_to_bmesh(bm, int_layer, stack_layer, mapping, element_type)
+        sync_mapping_to_bmesh(
+            bm,
+            int_layer,
+            stack_layer,
+            mapping,
+            element_type,
+            changed_indices,
+        )
+        mark_bmesh_mapping_synchronized(mesh, bm, element_type)
         bm.to_mesh(mesh)
         mesh.update()
     if mapping_changed or assignment_changed:
@@ -484,16 +685,19 @@ def count_elements_for_layer(obj: bpy.types.Object, element_type: str, layer_id:
     if layer_id is None:
         return 0
     settings = getattr(obj, "mesh_annotations", None)
-    mapping = load_element_layers(settings, element_type)
-    return sum(1 for layers in mapping.values() if layer_id in layers)
+    return int(element_layer_counts(settings, element_type).get(layer_id, 0))
 
 
 def collect_element_indices_for_layer(obj: bpy.types.Object, element_type: str, layer_id: int):
     settings = getattr(obj, "mesh_annotations", None)
     mapping = load_element_layers(settings, element_type)
     sequence = get_mesh_sequence(obj, element_type)
-    valid = {elem.index for elem in sequence}
-    return [int(idx) for idx, layers in mapping.items() if int(idx) in valid and layer_id in layers]
+    element_count = len(sequence)
+    return [
+        int(idx)
+        for idx, layers in mapping.items()
+        if 0 <= int(idx) < element_count and layer_id in layers
+    ]
 
 
 def select_elements_for_layer(obj: bpy.types.Object, element_type: str, layer_id: int) -> int:
@@ -506,7 +710,9 @@ def select_elements_for_layer(obj: bpy.types.Object, element_type: str, layer_id
     container = element_container(bm, element_type)
     settings = obj.mesh_annotations
     mapping = load_element_layers(settings, element_type)
-    mapping_changed = merge_stack_layer_into_mapping(mapping, bm, stack_layer, element_type)
+    mapping_changed = merge_stack_layer_if_needed(
+        mapping, mesh, bm, stack_layer, element_type
+    )
     if mapping_changed and settings is not None:
         save_element_layers(settings, element_type, mapping)
     target_indices = {int(idx) for idx, layers in mapping.items() if layer_id in layers}
@@ -536,24 +742,32 @@ def mark_face_layer_edges_as_seam(obj: bpy.types.Object, layer_ids) -> int:
     ensure_lookup_tables(bm, FACE)
     ensure_lookup_tables(bm, EDGE)
     mapping = load_element_layers(settings, FACE)
-    mapping_changed = merge_stack_layer_into_mapping(mapping, bm, stack_layer, FACE)
+    mapping_changed = merge_stack_layer_if_needed(mapping, mesh, bm, stack_layer, FACE)
     if mapping_changed:
         save_element_layers(settings, FACE, mapping)
-    order_lookup = layer_order_map(settings, FACE)
-    face_layers_map = {}
-    for face in bm.faces:
-        layers = normalize_layer_ids(get_layers_for_index(mapping, face.index), order_lookup)
-        if not layers and face[int_layer] >= 0:
-            layers = normalize_layer_ids([face[int_layer]], order_lookup)
-        face_layers_map[face.index] = layers
+    layer_faces_map = {layer_id: set() for layer_id in target_layers}
+    for raw_index, layers in mapping.items():
+        face_index = int(raw_index)
+        if not (0 <= face_index < len(bm.faces)):
+            continue
+        for layer_id in target_layers.intersection(layers):
+            layer_faces_map[layer_id].add(face_index)
+    missing_legacy_layers = {
+        layer_id
+        for layer_id, face_indices in layer_faces_map.items()
+        if not face_indices
+    }
+    if missing_legacy_layers:
+        for face in bm.faces:
+            layer_id = face[int_layer]
+            if layer_id in missing_legacy_layers:
+                layer_faces_map[layer_id].add(face.index)
     edges_to_mark = set()
-    for lid in target_layers:
-        layer_faces = {idx for idx, layers in face_layers_map.items() if lid in layers}
+    for layer_faces in layer_faces_map.values():
         if not layer_faces:
             continue
-        for face in bm.faces:
-            if face.index not in layer_faces:
-                continue
+        for face_index in layer_faces:
+            face = bm.faces[face_index]
             for edge in face.edges:
                 adjacent = {link_face.index for link_face in edge.link_faces}
                 if len(adjacent) < 2:
@@ -624,7 +838,9 @@ def collect_layer_usage_from_selection(obj, element_type: str):
     _int_layer, stack_layer = ensure_annotation_layers(bm, element_type)
     ensure_lookup_tables(bm, element_type)
     mapping = load_element_layers(settings, element_type)
-    mapping_changed = merge_stack_layer_into_mapping(mapping, bm, stack_layer, element_type)
+    mapping_changed = merge_stack_layer_if_needed(
+        mapping, mesh, bm, stack_layer, element_type
+    )
     if mapping_changed and settings is not None:
         save_element_layers(settings, element_type, mapping)
     container = element_container(bm, element_type)

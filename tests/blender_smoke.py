@@ -1,6 +1,7 @@
 """Run with: blender --background --factory-startup --python tests/blender_smoke.py"""
 
 import importlib.util
+import json
 import os
 import sys
 import time
@@ -177,6 +178,139 @@ def test_cache_reuse(obj):
         overlay.build_overlay_batches = original_builder
 
 
+def test_clean_cache_skips_modifier_signature(obj):
+    overlay.invalidate_overlay_state()
+    with overlay_gpu_stub():
+        first = overlay.cached_overlay_batches(obj, obj.mesh_annotations)
+    original_signature = overlay._modifier_state_signature
+    try:
+        overlay._modifier_state_signature = lambda _obj: (_ for _ in ()).throw(
+            AssertionError("clean cache should not inspect modifier RNA")
+        )
+        second = overlay.cached_overlay_batches(obj, obj.mesh_annotations)
+        assert second is first
+    finally:
+        overlay._modifier_state_signature = original_signature
+
+
+def test_layer_counts_parse_once(obj):
+    settings = obj.mesh_annotations
+    original_data = settings.face_layers_data
+    original_loads = model.json.loads
+    calls = []
+    try:
+        settings.face_layers_data = json.dumps(
+            {"0": [1], "1": [1, 2], "2": [2]}
+        )
+        model.invalidate_element_layers_cache()
+        model.json.loads = lambda value: calls.append(value) or original_loads(value)
+        assert model.count_elements_for_layer(obj, FACE, 1) == 2
+        assert model.count_elements_for_layer(obj, FACE, 2) == 2
+        assert len(calls) == 1
+    finally:
+        model.json.loads = original_loads
+        settings.face_layers_data = original_data
+        model.invalidate_element_layers_cache()
+
+
+def test_face_only_generic_mapping_is_demand_driven():
+    obj = create_grid_object()
+    obj.name = "DemandDrivenMapping"
+    obj.modifiers.new("Triangulate", "TRIANGULATE")
+    bpy.context.view_layer.objects.active = obj
+    source_mesh = bmesh.new()
+    source_mesh.from_mesh(obj.data)
+    original_edges = evaluated_geometry._nearest_edge_sources
+    original_vertices = evaluated_geometry._topology_vertex_sources
+    try:
+        evaluated_geometry._nearest_edge_sources = lambda *_args, **_kwargs: (
+            (_ for _ in ()).throw(AssertionError("face-only mapping computed edges"))
+        )
+        evaluated_geometry._topology_vertex_sources = lambda *_args, **_kwargs: (
+            (_ for _ in ()).throw(AssertionError("face-only mapping computed vertices"))
+        )
+        geometry = evaluated_geometry.evaluated_overlay_geometry(
+            obj,
+            source_mesh,
+            obj.mesh_annotations,
+            {FACE: {10}, EDGE: set(), VERTEX: set()},
+        )
+        assert geometry[FACE]
+        assert not geometry[EDGE]
+        assert not geometry[VERTEX]
+    finally:
+        evaluated_geometry._nearest_edge_sources = original_edges
+        evaluated_geometry._topology_vertex_sources = original_vertices
+        source_mesh.free()
+        bpy.data.objects.remove(obj, do_unlink=True)
+
+
+def test_depsgraph_invalidation_is_scoped(obj):
+    bpy.context.view_layer.objects.active = obj
+    overlay.invalidate_overlay_state()
+    with overlay_gpu_stub():
+        overlay.cached_overlay_batches(obj, obj.mesh_annotations)
+    cache_key = obj.as_pointer()
+    cached = overlay._overlay_batch_cache[cache_key]
+    unrelated_mesh = bpy.data.meshes.new("UnrelatedMesh")
+    try:
+        unrelated_update = SimpleNamespace(
+            is_updated_geometry=True,
+            is_updated_transform=False,
+            id=unrelated_mesh,
+        )
+        overlay.annotation_depsgraph_update_post(
+            None, SimpleNamespace(updates=[unrelated_update])
+        )
+        assert not cached["dirty"]
+
+        related_update = SimpleNamespace(
+            is_updated_geometry=True,
+            is_updated_transform=False,
+            id=obj.data,
+        )
+        overlay.annotation_depsgraph_update_post(
+            None, SimpleNamespace(updates=[related_update])
+        )
+        assert cached["dirty"]
+    finally:
+        bpy.data.meshes.remove(unrelated_mesh)
+
+
+def test_local_surface_batches_survive_style_and_transform_updates():
+    obj = create_grid_object()
+    obj.name = "LocalSurfaceCache"
+    bpy.context.view_layer.objects.active = obj
+    settings = obj.mesh_annotations
+    layer = model.create_layer(settings, FACE)
+    model.save_element_layers(settings, FACE, {"10": [layer.layer_id]})
+    overlay.invalidate_overlay_state()
+    with overlay_gpu_stub():
+        batches = overlay.cached_overlay_batches(obj, settings)
+    face_entries = batches[FACE]
+    assert face_entries
+    uses_local_coordinates = all(
+        entry.get("coordinate_space") == "LOCAL" for entry in face_entries
+    )
+    cache_key = obj.as_pointer()
+    cached = overlay._overlay_batch_cache[cache_key]
+
+    layer.color = (0.2, 0.4, 0.8, 1.0)
+    assert overlay._overlay_batch_cache.get(cache_key) is cached
+    assert not cached["dirty"]
+
+    transform_update = SimpleNamespace(
+        is_updated_geometry=False,
+        is_updated_transform=True,
+        id=obj,
+    )
+    overlay.annotation_depsgraph_update_post(
+        None, SimpleNamespace(updates=[transform_update])
+    )
+    assert cached["dirty"] is not uses_local_coordinates
+    bpy.data.objects.remove(obj, do_unlink=True)
+
+
 def test_overlay_color_is_selection_independent(obj):
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.mode_set(mode="EDIT")
@@ -300,6 +434,11 @@ def main():
         test_multi_layer_assignment_and_active_removal(obj)
         test_button_operators(obj)
         test_cache_reuse(obj)
+        test_clean_cache_skips_modifier_signature(obj)
+        test_layer_counts_parse_once(obj)
+        test_face_only_generic_mapping_is_demand_driven()
+        test_depsgraph_invalidation_is_scoped(obj)
+        test_local_surface_batches_survive_style_and_transform_updates()
         test_overlay_color_is_selection_independent(obj)
         test_history_resyncs_bmesh_ownership(obj)
         counts = {kind: len(records) for kind, records in geometry.items()}

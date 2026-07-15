@@ -110,12 +110,19 @@ def _nearest_face_sources(bm: bmesh.types.BMesh, mesh: bpy.types.Mesh):
 
 
 def _nearest_edge_sources(
-    obj, bm: bmesh.types.BMesh, mesh: bpy.types.Mesh, face_sources, edge_faces
+    obj,
+    bm: bmesh.types.BMesh,
+    mesh: bpy.types.Mesh,
+    face_sources,
+    edge_faces,
+    source_edge_filter=None,
 ):
     source_candidates = defaultdict(list)
     source_midpoints = {}
     mirror_transforms = _overlay_mirror_transforms(obj)
     for edge in bm.edges:
+        if source_edge_filter is not None and edge.index not in source_edge_filter:
+            continue
         signature = tuple(sorted(face.index for face in edge.link_faces))
         source_candidates[signature].append(edge.index)
         midpoint = (edge.verts[0].co + edge.verts[1].co) * 0.5
@@ -175,7 +182,13 @@ def _nearest_vertex_sources(obj, bm: bmesh.types.BMesh, mesh: bpy.types.Mesh):
     return sources
 
 
-def _topology_vertex_sources(obj, bm: bmesh.types.BMesh, mesh: bpy.types.Mesh, edge_sources):
+def _topology_vertex_sources(
+    obj,
+    bm: bmesh.types.BMesh,
+    mesh: bpy.types.Mesh,
+    edge_sources,
+    source_vertex_filter=None,
+):
     """Map source vertices from intersections of their evaluated edge descendants."""
     sources = [None] * len(mesh.vertices)
     if not bm.verts or not mesh.vertices:
@@ -195,7 +208,15 @@ def _topology_vertex_sources(obj, bm: bmesh.types.BMesh, mesh: bpy.types.Mesh, e
     mirror_transforms = _overlay_mirror_transforms(obj)
     chosen = {}
     fallback_tree = None
-    for source_vertex in bm.verts:
+    if source_vertex_filter is None:
+        source_vertices = bm.verts
+    else:
+        source_vertices = (
+            bm.verts[index]
+            for index in sorted(source_vertex_filter)
+            if 0 <= index < len(bm.verts)
+        )
+    for source_vertex in source_vertices:
         incident_edges = [
             (edge.index, source_edge_vertices[edge.index])
             for edge in source_vertex.link_edges
@@ -248,15 +269,37 @@ def _topology_vertex_sources(obj, bm: bmesh.types.BMesh, mesh: bpy.types.Mesh, e
     return sources
 
 
-def _evaluated_source_maps(obj: bpy.types.Object, bm: bmesh.types.BMesh, mesh: bpy.types.Mesh):
+def _evaluated_source_maps(
+    obj: bpy.types.Object,
+    bm: bmesh.types.BMesh,
+    mesh: bpy.types.Mesh,
+    required_types=None,
+    source_filters=None,
+):
     """Map evaluated elements back to the edit-cage elements that own annotations."""
+    required_types = set(required_types or (FACE, EDGE, VERTEX))
+    needs_vertex_sources = VERTEX in required_types
+    needs_edge_sources = EDGE in required_types or needs_vertex_sources
+    needs_face_sources = FACE in required_types or needs_edge_sources
+    source_filters = source_filters or {}
+    vertex_filter = source_filters.get(VERTEX)
+    if needs_vertex_sources and vertex_filter:
+        required_source_edges = {
+            edge.index
+            for vertex_index in vertex_filter
+            if 0 <= vertex_index < len(bm.verts)
+            for edge in bm.verts[vertex_index].link_edges
+        }
+    else:
+        required_source_edges = source_filters.get(EDGE) if EDGE in required_types else None
+
     source_counts = (len(bm.verts), len(bm.edges), len(bm.faces))
     evaluated_counts = (len(mesh.vertices), len(mesh.edges), len(mesh.polygons))
     if source_counts == evaluated_counts:
         return (
-            list(range(source_counts[2])),
-            list(range(source_counts[1])),
-            list(range(source_counts[0])),
+            list(range(source_counts[2])) if needs_face_sources else None,
+            list(range(source_counts[1])) if needs_edge_sources else None,
+            list(range(source_counts[0])) if needs_vertex_sources else None,
             "DIRECT",
         )
 
@@ -271,25 +314,86 @@ def _evaluated_source_maps(obj: bpy.types.Object, bm: bmesh.types.BMesh, mesh: b
         face_sources = one_copy_face_sources * mirror_copies
         if len(face_sources) == len(mesh.polygons):
             if mirror_copies == 1:
+                if not needs_edge_sources:
+                    return face_sources, None, None, "SUBDIVISION"
                 edge_child_count = 2 ** subdivision_levels
                 edge_sources = []
                 for edge in bm.edges:
-                    edge_sources.extend([edge.index] * edge_child_count)
+                    source_index = (
+                        edge.index
+                        if required_source_edges is None or edge.index in required_source_edges
+                        else None
+                    )
+                    edge_sources.extend([source_index] * edge_child_count)
                 if len(edge_sources) <= len(mesh.edges) and len(bm.verts) <= len(mesh.vertices):
                     edge_sources.extend([None] * (len(mesh.edges) - len(edge_sources)))
-                    vertex_sources = _topology_vertex_sources(obj, bm, mesh, edge_sources)
-                    return face_sources, edge_sources, vertex_sources, "SUBDIVISION"
+                    vertex_sources = (
+                        _topology_vertex_sources(
+                            obj,
+                            bm,
+                            mesh,
+                            edge_sources,
+                            source_vertex_filter=vertex_filter,
+                        )
+                        if needs_vertex_sources
+                        else None
+                    )
+                    return (
+                        face_sources if needs_face_sources else None,
+                        edge_sources if needs_edge_sources else None,
+                        vertex_sources,
+                        "SUBDIVISION",
+                    )
 
-            edge_faces = _evaluated_edge_faces(mesh)
-            edge_sources = _nearest_edge_sources(obj, bm, mesh, face_sources, edge_faces)
-            vertex_sources = _topology_vertex_sources(obj, bm, mesh, edge_sources)
+            edge_sources = None
+            vertex_sources = None
+            if needs_edge_sources:
+                edge_faces = _evaluated_edge_faces(mesh)
+                edge_sources = _nearest_edge_sources(
+                    obj,
+                    bm,
+                    mesh,
+                    face_sources,
+                    edge_faces,
+                    source_edge_filter=required_source_edges,
+                )
+            if needs_vertex_sources:
+                vertex_sources = _topology_vertex_sources(
+                    obj,
+                    bm,
+                    mesh,
+                    edge_sources,
+                    source_vertex_filter=vertex_filter,
+                )
             mode = "MIRROR_SUBDIVISION" if subdivision_levels > 0 else "MIRROR"
-            return face_sources, edge_sources, vertex_sources, mode
+            return (
+                face_sources if needs_face_sources else None,
+                edge_sources,
+                vertex_sources,
+                mode,
+            )
 
-    face_sources = _nearest_face_sources(bm, mesh)
-    edge_faces = _evaluated_edge_faces(mesh)
-    edge_sources = _nearest_edge_sources(obj, bm, mesh, face_sources, edge_faces)
-    vertex_sources = _topology_vertex_sources(obj, bm, mesh, edge_sources)
+    face_sources = _nearest_face_sources(bm, mesh) if needs_face_sources else None
+    edge_sources = None
+    vertex_sources = None
+    if needs_edge_sources:
+        edge_faces = _evaluated_edge_faces(mesh)
+        edge_sources = _nearest_edge_sources(
+            obj,
+            bm,
+            mesh,
+            face_sources,
+            edge_faces,
+            source_edge_filter=required_source_edges,
+        )
+    if needs_vertex_sources:
+        vertex_sources = _topology_vertex_sources(
+            obj,
+            bm,
+            mesh,
+            edge_sources,
+            source_vertex_filter=vertex_filter,
+        )
     return face_sources, edge_sources, vertex_sources, "NEAREST"
 
 
@@ -464,19 +568,33 @@ def _sparse_exact_overlay_geometry(obj, bm, mesh, source_filters):
     return {FACE: faces, EDGE: edges, VERTEX: vertices}, mode
 
 
-def _cage_overlay_geometry(bm: bmesh.types.BMesh):
+def _cage_overlay_geometry(bm: bmesh.types.BMesh, source_filters=None):
+    source_filters = source_filters or {}
+    face_filter = source_filters.get(FACE)
+    edge_filter = source_filters.get(EDGE)
+    vertex_filter = source_filters.get(VERTEX)
     face_triangles = defaultdict(list)
     for loops in bm.calc_loop_triangles():
-        face_triangles[loops[0].face.index].append(tuple(loop.vert.co.copy() for loop in loops))
+        face_index = loops[0].face.index
+        if face_filter is None or face_index in face_filter:
+            face_triangles[face_index].append(tuple(loop.vert.co.copy() for loop in loops))
 
     faces = []
-    for face in bm.faces:
+    face_indices = range(len(bm.faces)) if face_filter is None else sorted(face_filter)
+    for face_index in face_indices:
+        if not (0 <= face_index < len(bm.faces)):
+            continue
+        face = bm.faces[face_index]
         triangles = face_triangles.get(face.index)
         if triangles:
             faces.append((face.index, triangles, face.normal.copy()))
 
     edges = []
-    for edge in bm.edges:
+    edge_indices = range(len(bm.edges)) if edge_filter is None else sorted(edge_filter)
+    for edge_index in edge_indices:
+        if not (0 <= edge_index < len(bm.edges)):
+            continue
+        edge = bm.edges[edge_index]
         p0 = edge.verts[0].co.copy()
         p1 = edge.verts[1].co.copy()
         normal0 = edge.verts[0].normal.copy()
@@ -488,7 +606,12 @@ def _cage_overlay_geometry(bm: bmesh.types.BMesh):
             normal1 = fallback.copy()
         edges.append((edge.index, p0, p1, normal0, normal1))
 
-    vertices = [(vertex.index, vertex.co.copy(), vertex.normal.copy()) for vertex in bm.verts]
+    vertex_indices = range(len(bm.verts)) if vertex_filter is None else sorted(vertex_filter)
+    vertices = [
+        (index, bm.verts[index].co.copy(), bm.verts[index].normal.copy())
+        for index in vertex_indices
+        if 0 <= index < len(bm.verts)
+    ]
     return {FACE: faces, EDGE: edges, VERTEX: vertices}, "CAGE"
 
 
@@ -503,6 +626,17 @@ def evaluated_overlay_geometry(
         if not isinstance(mesh, bpy.types.Mesh) or not mesh.vertices:
             raise RuntimeError("evaluated mesh is empty")
 
+        if source_filters is None:
+            required_types = {FACE, EDGE, VERTEX}
+        else:
+            required_types = {
+                element_type
+                for element_type in (FACE, EDGE, VERTEX)
+                if source_filters.get(element_type)
+            }
+        if not required_types:
+            return {FACE: [], EDGE: [], VERTEX: []}
+
         if source_filters is not None:
             sparse_result = _sparse_exact_overlay_geometry(obj, bm, mesh, source_filters)
             if sparse_result is not None:
@@ -516,7 +650,13 @@ def evaluated_overlay_geometry(
                 return geometry
 
         face_sources, edge_sources, vertex_sources, mapping_mode = (
-            _evaluated_source_maps(obj, bm, mesh)
+            _evaluated_source_maps(
+                obj,
+                bm,
+                mesh,
+                required_types=required_types,
+                source_filters=source_filters,
+            )
         )
         if source_filters is None:
             face_filter = edge_filter = vertex_filter = None
@@ -526,43 +666,46 @@ def evaluated_overlay_geometry(
             vertex_filter = source_filters.get(VERTEX, set())
 
         faces = []
-        for polygon in mesh.polygons:
-            source_index = face_sources[polygon.index]
-            if (
-                source_index is not None
-                and (face_filter is None or source_index in face_filter)
-            ):
-                triangles = _polygon_triangles(mesh, polygon)
-                if triangles:
-                    faces.append((source_index, triangles, polygon.normal.copy()))
+        if FACE in required_types:
+            for polygon in mesh.polygons:
+                source_index = face_sources[polygon.index]
+                if (
+                    source_index is not None
+                    and (face_filter is None or source_index in face_filter)
+                ):
+                    triangles = _polygon_triangles(mesh, polygon)
+                    if triangles:
+                        faces.append((source_index, triangles, polygon.normal.copy()))
 
         edges = []
-        for edge in mesh.edges:
-            source_index = edge_sources[edge.index]
-            if source_index is None or (
-                edge_filter is not None and source_index not in edge_filter
-            ):
-                continue
-            vertex0 = mesh.vertices[edge.vertices[0]]
-            vertex1 = mesh.vertices[edge.vertices[1]]
-            p0 = vertex0.co.copy()
-            p1 = vertex1.co.copy()
-            normal0 = vertex0.normal.copy()
-            normal1 = vertex1.normal.copy()
-            fallback = (p0 - p1).cross(Vector((0.0, 0.0, 1.0)))
-            if normal0.length == 0:
-                normal0 = fallback.copy()
-            if normal1.length == 0:
-                normal1 = fallback.copy()
-            edges.append((source_index, p0, p1, normal0, normal1))
+        if EDGE in required_types:
+            for edge in mesh.edges:
+                source_index = edge_sources[edge.index]
+                if source_index is None or (
+                    edge_filter is not None and source_index not in edge_filter
+                ):
+                    continue
+                vertex0 = mesh.vertices[edge.vertices[0]]
+                vertex1 = mesh.vertices[edge.vertices[1]]
+                p0 = vertex0.co.copy()
+                p1 = vertex1.co.copy()
+                normal0 = vertex0.normal.copy()
+                normal1 = vertex1.normal.copy()
+                fallback = (p0 - p1).cross(Vector((0.0, 0.0, 1.0)))
+                if normal0.length == 0:
+                    normal0 = fallback.copy()
+                if normal1.length == 0:
+                    normal1 = fallback.copy()
+                edges.append((source_index, p0, p1, normal0, normal1))
 
         vertices = []
-        for vertex in mesh.vertices:
-            source_index = vertex_sources[vertex.index]
-            if source_index is not None and (
-                vertex_filter is None or source_index in vertex_filter
-            ):
-                vertices.append((source_index, vertex.co.copy(), vertex.normal.copy()))
+        if VERTEX in required_types:
+            for vertex in mesh.vertices:
+                source_index = vertex_sources[vertex.index]
+                if source_index is not None and (
+                    vertex_filter is None or source_index in vertex_filter
+                ):
+                    vertices.append((source_index, vertex.co.copy(), vertex.normal.copy()))
 
         debug_log(
             settings,
@@ -572,7 +715,7 @@ def evaluated_overlay_geometry(
         return {FACE: faces, EDGE: edges, VERTEX: vertices}
     except Exception as exc:
         debug_log(settings, f"Evaluated overlay unavailable; using edit cage: {exc}")
-        return _cage_overlay_geometry(bm)[0]
+        return _cage_overlay_geometry(bm, source_filters=source_filters)[0]
 
 
 def _coordinate_key(coordinate):
@@ -583,6 +726,8 @@ def ordered_edge_chains(records):
     """Split evaluated descendants into connected, consistently oriented chains."""
     if not records:
         return []
+    if len(records) == 1:
+        return [records]
     endpoint_keys = []
     adjacency = defaultdict(list)
     for index, (p0, p1, _normal0, _normal1) in enumerate(records):
