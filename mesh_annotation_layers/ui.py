@@ -3,7 +3,7 @@
 import bpy
 
 from .constants import EDGE, ELEMENT_TYPES, FACE, VERTEX, element_spec
-from .i18n import addon_preferences, tr
+from .i18n import tr
 from .loops import element_labels
 from .model import (
     active_layer,
@@ -22,328 +22,100 @@ def draw_existing_layer_menu(layout, obj, element_type: str, use_loop: bool):
     if not collection:
         layout.label(text=tr('No layers'))
         return
+    current = active_layer(settings, element_type)
+    current_id = current.layer_id if current else -1
     for layer in collection:
-        count = count_elements_for_layer(obj, element_type, layer.layer_id)
-        text = f"{layer.name} ({count})" if count else layer.name
-        operator = layout.operator("mesh.annotation_assign_layer", text=text, icon="BRUSH_DATA")
+        icon = "RADIOBUT_ON" if layer.layer_id == current_id else "RADIOBUT_OFF"
+        operator = layout.operator(
+            "mesh.annotation_assign_layer",
+            text=layer.name,
+            icon=icon,
+        )
         operator.layer_id = layer.layer_id
         operator.element_type = element_type
         operator.use_loop = use_loop
+        operator.make_active = True
 
 
-def context_menu_use_type_choice():
-    prefs = addon_preferences()
-    return bool(prefs and getattr(prefs, "context_menu_split_types", True))
-
-
-def context_menu_default_type(context):
-    return infer_element_type_from_mode(context)
-
-
-TYPE_MENU_ACTIONS = {
-    "assign_selected_active": {
-        "kind": "operator",
-        "operator": "mesh.annotation_assign_active",
-        "props": {},
-        "label": "Choose Element Type",
-    },
-    "assign_selected_new": {
-        "kind": "operator",
-        "operator": "mesh.annotation_assign_new_layer",
-        "props": {"use_loop": False, "skip_dialog": True},
-        "label": "Choose Element Type",
-    },
-    "assign_selected_existing": {
-        "kind": "existing",
-        "use_loop": False,
-        "label": "Choose Element Type",
-    },
-    "assign_loop_active": {
-        "kind": "operator",
-        "operator": "mesh.annotation_assign_loop",
-        "props": {},
-        "label": "Choose Element Type",
-    },
-    "assign_loop_new": {
-        "kind": "operator",
-        "operator": "mesh.annotation_assign_new_layer",
-        "props": {"use_loop": True, "skip_dialog": True},
-        "label": "Choose Element Type",
-    },
-    "assign_loop_existing": {
-        "kind": "existing",
-        "use_loop": True,
-        "label": "Choose Element Type",
-    },
-    "clear_selected_all": {
-        "kind": "clear",
-        "mode": "ALL",
-        "label": "Choose Element Type",
-    },
-    "clear_selected_top": {
-        "kind": "clear",
-        "mode": "TOP",
-        "label": "Choose Element Type",
-    },
-    "clear_selected_active": {
-        "kind": "clear",
-        "mode": "ACTIVE",
-        "label": "Choose Element Type",
-    },
-}
-
-
-class MeshAnnotationTypeMenuBase(bpy.types.Menu):
-    bl_label = tr('Choose Element Type')
-    action_key = ""
+class VIEW3D_MT_mesh_annotation_assign_selected_existing(bpy.types.Menu):
+    bl_idname = "VIEW3D_MT_mesh_annotation_assign_selected_existing"
+    bl_label = tr('Choose Target Layer')
 
     def draw(self, context):
-        layout = self.layout
-        action = TYPE_MENU_ACTIONS.get(self.action_key)
-        if not action:
-            layout.label(text=tr('No action configured'))
-            return
-        layout.label(text=tr(action.get("label", "Choose Element Type")))
-        obj = context.object
-        for element_type in ELEMENT_TYPES:
-            meta = element_spec(element_type)
-            text = tr(meta.label)
-            icon = meta.icon
-            kind = action["kind"]
-            if kind == "operator":
-                op = layout.operator(action["operator"], text=text, icon=icon)
-                op.element_type = element_type
-                for attr, value in action.get("props", {}).items():
-                    setattr(op, attr, value)
-            elif kind == "existing":
-                col = layout.column()
-                col.label(text=text, icon=icon)
-                draw_existing_layer_menu(
-                    col,
-                    obj,
-                    element_type,
-                    use_loop=action.get("use_loop", False),
-                )
-            elif kind == "clear":
-                op = layout.operator("mesh.annotation_clear_selected", text=text, icon=icon)
-                op.element_type = element_type
-                op.mode = action["mode"]
-            else:
-                layout.label(text=tr('Unsupported action'), icon="ERROR")
-
-
-class VIEW3D_MT_mesh_annotation_type_assign_selected_active(MeshAnnotationTypeMenuBase):
-    bl_idname = "VIEW3D_MT_mesh_annotation_type_assign_selected_active"
-    action_key = "assign_selected_active"
-
-
-class VIEW3D_MT_mesh_annotation_type_assign_selected_new(MeshAnnotationTypeMenuBase):
-    bl_idname = "VIEW3D_MT_mesh_annotation_type_assign_selected_new"
-    action_key = "assign_selected_new"
-
-
-class VIEW3D_MT_mesh_annotation_type_assign_selected_existing(MeshAnnotationTypeMenuBase):
-    bl_idname = "VIEW3D_MT_mesh_annotation_type_assign_selected_existing"
-    action_key = "assign_selected_existing"
-
-
-class VIEW3D_MT_mesh_annotation_type_assign_loop_active(MeshAnnotationTypeMenuBase):
-    bl_idname = "VIEW3D_MT_mesh_annotation_type_assign_loop_active"
-    action_key = "assign_loop_active"
-
-
-class VIEW3D_MT_mesh_annotation_type_assign_loop_new(MeshAnnotationTypeMenuBase):
-    bl_idname = "VIEW3D_MT_mesh_annotation_type_assign_loop_new"
-    action_key = "assign_loop_new"
-
-
-class VIEW3D_MT_mesh_annotation_type_assign_loop_existing(MeshAnnotationTypeMenuBase):
-    bl_idname = "VIEW3D_MT_mesh_annotation_type_assign_loop_existing"
-    action_key = "assign_loop_existing"
-
-
-class VIEW3D_MT_mesh_annotation_type_clear_selected_all(MeshAnnotationTypeMenuBase):
-    bl_idname = "VIEW3D_MT_mesh_annotation_type_clear_selected_all"
-    action_key = "clear_selected_all"
-
-
-class VIEW3D_MT_mesh_annotation_type_clear_selected_top(MeshAnnotationTypeMenuBase):
-    bl_idname = "VIEW3D_MT_mesh_annotation_type_clear_selected_top"
-    action_key = "clear_selected_top"
-
-
-class VIEW3D_MT_mesh_annotation_type_clear_selected_active(MeshAnnotationTypeMenuBase):
-    bl_idname = "VIEW3D_MT_mesh_annotation_type_clear_selected_active"
-    action_key = "clear_selected_active"
-
-
-def add_assign_selected_active_entry(layout, context):
-    text = tr('Assign Selected to Active Layer')
-    if context_menu_use_type_choice():
-        layout.menu(
-            "VIEW3D_MT_mesh_annotation_type_assign_selected_active",
-            text=text,
-            icon="BRUSH_DATA",
+        draw_existing_layer_menu(
+            self.layout,
+            context.object,
+            infer_element_type_from_mode(context),
+            use_loop=False,
         )
-    else:
-        element_type = context_menu_default_type(context)
-        op = layout.operator("mesh.annotation_assign_active", text=text, icon="BRUSH_DATA")
-        op.element_type = element_type
 
 
-def add_assign_selected_new_entry(layout, context):
-    text = tr('Assign Selected to New Layer')
-    if context_menu_use_type_choice():
-        layout.menu("VIEW3D_MT_mesh_annotation_type_assign_selected_new", text=text, icon="ADD")
-    else:
-        element_type = context_menu_default_type(context)
-        op = layout.operator("mesh.annotation_assign_new_layer", text=text, icon="ADD")
-        op.element_type = element_type
-        op.use_loop = False
-        op.skip_dialog = True
-
-
-def add_assign_selected_existing_entry(layout, context):
-    text = tr('Assign Selected to Existing Layer')
-    if context_menu_use_type_choice():
-        layout.menu(
-            "VIEW3D_MT_mesh_annotation_type_assign_selected_existing",
-            text=text,
-            icon="GROUP_VCOL",
-        )
-    else:
-        layout.label(text=text, icon="GROUP_VCOL")
-        element_type = context_menu_default_type(context)
-        draw_existing_layer_menu(layout, context.object, element_type, use_loop=False)
-
-
-def add_assign_loop_active_entry(layout, context):
-    text = tr('Assign Loop to Active Layer')
-    if context_menu_use_type_choice():
-        layout.menu(
-            "VIEW3D_MT_mesh_annotation_type_assign_loop_active",
-            text=text,
-            icon="BRUSH_DATA",
-        )
-    else:
-        element_type = context_menu_default_type(context)
-        op = layout.operator("mesh.annotation_assign_loop", text=text, icon="BRUSH_DATA")
-        op.element_type = element_type
-
-
-def add_assign_loop_new_entry(layout, context):
-    text = tr('Assign Loop to New Layer')
-    if context_menu_use_type_choice():
-        layout.menu("VIEW3D_MT_mesh_annotation_type_assign_loop_new", text=text, icon="ADD")
-    else:
-        element_type = context_menu_default_type(context)
-        op = layout.operator("mesh.annotation_assign_new_layer", text=text, icon="ADD")
-        op.element_type = element_type
-        op.use_loop = True
-        op.skip_dialog = True
-
-
-def add_assign_loop_existing_entry(layout, context):
-    text = tr('Assign Loop to Existing Layer')
-    if context_menu_use_type_choice():
-        layout.menu(
-            "VIEW3D_MT_mesh_annotation_type_assign_loop_existing",
-            text=text,
-            icon="GROUP_VCOL",
-        )
-    else:
-        layout.label(text=text, icon="GROUP_VCOL")
-        element_type = context_menu_default_type(context)
-        draw_existing_layer_menu(layout, context.object, element_type, use_loop=True)
-
-
-def add_clear_selected_entry(layout, context, mode: str):
-    if mode == "ACTIVE":
-        text = tr('Clear Selected (Active Layer)')
-        icon = "REMOVE"
-    elif mode == "ALL":
-        text = tr('Clear Selected (All Layers)')
-        icon = "X"
-    else:
-        text = tr('Clear Selected (Top Layer)')
-        icon = "REMOVE"
-    if context_menu_use_type_choice():
-        menu_ids = {
-            "ACTIVE": "VIEW3D_MT_mesh_annotation_type_clear_selected_active",
-            "ALL": "VIEW3D_MT_mesh_annotation_type_clear_selected_all",
-            "TOP": "VIEW3D_MT_mesh_annotation_type_clear_selected_top",
-        }
-        menu_id = menu_ids[mode]
-        layout.menu(menu_id, text=text, icon=icon)
-    else:
-        element_type = context_menu_default_type(context)
-        op = layout.operator("mesh.annotation_clear_selected", text=text, icon=icon)
-        op.element_type = element_type
-        op.mode = mode
-
-
-class VIEW3D_MT_mesh_annotation_add(bpy.types.Menu):
-    bl_idname = "VIEW3D_MT_mesh_annotation_add"
-    bl_label = tr('Add')
+class VIEW3D_MT_mesh_annotation_assign_loop_existing(bpy.types.Menu):
+    bl_idname = "VIEW3D_MT_mesh_annotation_assign_loop_existing"
+    bl_label = tr('Choose Target Layer')
 
     def draw(self, context):
-        layout = self.layout
-        layout.menu(
-            "VIEW3D_MT_mesh_annotation_add_selected",
-            text=tr('Selected Elements'),
-            icon="FACESEL",
+        draw_existing_layer_menu(
+            self.layout,
+            context.object,
+            infer_element_type_from_mode(context),
+            use_loop=True,
         )
-        layout.menu(
-            "VIEW3D_MT_mesh_annotation_add_loop",
-            text=tr('Loops / Paths'),
+
+
+def draw_active_assignment(layout, element_type: str, layer, *, use_loop: bool):
+    row = layout.row()
+    row.enabled = layer is not None
+    layer_name = layer.name if layer else tr('No Active Layer')
+    if use_loop:
+        text = tr('Add Loop to {name}', name=layer_name)
+        operator = row.operator(
+            "mesh.annotation_assign_loop",
+            text=text,
             icon="EDGESEL",
         )
-
-
-class VIEW3D_MT_mesh_annotation_add_selected(bpy.types.Menu):
-    bl_idname = "VIEW3D_MT_mesh_annotation_add_selected"
-    bl_label = tr('Selected Elements')
-
-    def draw(self, context):
-        layout = self.layout
-        add_assign_selected_active_entry(layout, context)
-        add_assign_selected_new_entry(layout, context)
-        add_assign_selected_existing_entry(layout, context)
-
-
-class VIEW3D_MT_mesh_annotation_add_loop(bpy.types.Menu):
-    bl_idname = "VIEW3D_MT_mesh_annotation_add_loop"
-    bl_label = tr('Loops / Paths')
-
-    def draw(self, context):
-        layout = self.layout
-        add_assign_loop_active_entry(layout, context)
-        add_assign_loop_new_entry(layout, context)
-        add_assign_loop_existing_entry(layout, context)
-
-
-class VIEW3D_MT_mesh_annotation_remove(bpy.types.Menu):
-    bl_idname = "VIEW3D_MT_mesh_annotation_remove"
-    bl_label = tr('Remove')
-
-    def draw(self, context):
-        layout = self.layout
-        layout.menu(
-            "VIEW3D_MT_mesh_annotation_remove_selected",
-            text=tr('Selected Elements'),
-            icon="TRASH",
+    else:
+        text = tr('Add Selected to {name}', name=layer_name)
+        operator = row.operator(
+            "mesh.annotation_assign_active",
+            text=text,
+            icon="BRUSH_DATA",
         )
+    operator.element_type = element_type
 
 
-class VIEW3D_MT_mesh_annotation_remove_selected(bpy.types.Menu):
-    bl_idname = "VIEW3D_MT_mesh_annotation_remove_selected"
-    bl_label = tr('Remove Selected')
+def draw_new_layer_assignment(layout, element_type: str, *, use_loop: bool):
+    text = tr('New Layer from Loop') if use_loop else tr('New Layer from Selected')
+    operator = layout.operator(
+        "mesh.annotation_assign_new_layer",
+        text=text,
+        icon="ADD",
+    )
+    operator.element_type = element_type
+    operator.use_loop = use_loop
+    operator.skip_dialog = True
 
-    def draw(self, context):
-        layout = self.layout
-        add_clear_selected_entry(layout, context, mode="ACTIVE")
-        add_clear_selected_entry(layout, context, mode="TOP")
-        add_clear_selected_entry(layout, context, mode="ALL")
+
+def draw_clear_assignment(layout, element_type: str, layer, mode: str):
+    row = layout.row()
+    if mode == "ACTIVE":
+        row.enabled = layer is not None
+        layer_name = layer.name if layer else tr('No Active Layer')
+        text = tr('Remove Selected from {name}', name=layer_name)
+        icon = "REMOVE"
+    elif mode == "TOP":
+        text = tr('Remove Top Annotation from Selected')
+        icon = "REMOVE"
+    else:
+        text = tr('Remove All Annotations from Selected')
+        icon = "TRASH"
+    operator = row.operator(
+        "mesh.annotation_clear_selected",
+        text=text,
+        icon=icon,
+    )
+    operator.element_type = element_type
+    operator.mode = mode
 
 
 class MESH_UL_annotation_layers(bpy.types.UIList):
@@ -377,8 +149,42 @@ class VIEW3D_MT_mesh_annotation_context(bpy.types.Menu):
         if not obj or obj.type != "MESH" or context.mode != "EDIT_MESH":
             layout.label(text=tr('Switch to Edit Mode to use annotations'), icon="INFO")
             return
-        layout.menu("VIEW3D_MT_mesh_annotation_add", text=tr('Add'), icon="ADD")
-        layout.menu("VIEW3D_MT_mesh_annotation_remove", text=tr('Remove'), icon="TRASH")
+        element_type = infer_element_type_from_mode(context)
+        meta = element_spec(element_type)
+        layer = active_layer(obj.mesh_annotations, element_type)
+        layer_name = layer.name if layer else tr('No Active Layer')
+
+        layout.label(
+            text=tr(
+                '{type} · Active: {name}',
+                type=tr(meta.label),
+                name=layer_name,
+            ),
+            icon=meta.icon,
+        )
+        layout.separator()
+
+        draw_active_assignment(layout, element_type, layer, use_loop=False)
+        draw_new_layer_assignment(layout, element_type, use_loop=False)
+        layout.menu(
+            "VIEW3D_MT_mesh_annotation_assign_selected_existing",
+            text=tr('Add Selected to Another Layer'),
+            icon="GROUP_VCOL",
+        )
+
+        layout.separator()
+        draw_active_assignment(layout, element_type, layer, use_loop=True)
+        draw_new_layer_assignment(layout, element_type, use_loop=True)
+        layout.menu(
+            "VIEW3D_MT_mesh_annotation_assign_loop_existing",
+            text=tr('Add Loop to Another Layer'),
+            icon="GROUP_VCOL",
+        )
+
+        layout.separator()
+        draw_clear_assignment(layout, element_type, layer, mode="ACTIVE")
+        draw_clear_assignment(layout, element_type, layer, mode="TOP")
+        draw_clear_assignment(layout, element_type, layer, mode="ALL")
 
 
 class VIEW3D_PT_mesh_annotation(bpy.types.Panel):
@@ -634,25 +440,12 @@ def draw_context_menu(self, context):
 
 CLASSES = (
     MESH_UL_annotation_layers,
-    VIEW3D_MT_mesh_annotation_type_assign_selected_active,
-    VIEW3D_MT_mesh_annotation_type_assign_selected_new,
-    VIEW3D_MT_mesh_annotation_type_assign_selected_existing,
-    VIEW3D_MT_mesh_annotation_type_assign_loop_active,
-    VIEW3D_MT_mesh_annotation_type_assign_loop_new,
-    VIEW3D_MT_mesh_annotation_type_assign_loop_existing,
-    VIEW3D_MT_mesh_annotation_type_clear_selected_all,
-    VIEW3D_MT_mesh_annotation_type_clear_selected_top,
-    VIEW3D_MT_mesh_annotation_type_clear_selected_active,
-    VIEW3D_MT_mesh_annotation_add,
-    VIEW3D_MT_mesh_annotation_add_selected,
-    VIEW3D_MT_mesh_annotation_add_loop,
-    VIEW3D_MT_mesh_annotation_remove,
-    VIEW3D_MT_mesh_annotation_remove_selected,
+    VIEW3D_MT_mesh_annotation_assign_selected_existing,
+    VIEW3D_MT_mesh_annotation_assign_loop_existing,
     VIEW3D_MT_mesh_annotation_context,
     VIEW3D_PT_mesh_annotation,
     VIEW3D_PT_mesh_annotation_display,
 )
-
 
 
 def register():

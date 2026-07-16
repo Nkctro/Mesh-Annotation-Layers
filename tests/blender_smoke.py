@@ -19,8 +19,45 @@ sys.path.insert(0, str(ROOT))
 GRID_SEGMENTS = int(os.environ.get("MAL_GRID_SEGMENTS", "28"))
 
 import mesh_annotation_layers as addon
-from mesh_annotation_layers import evaluated_geometry, i18n, model, operators, overlay
+from mesh_annotation_layers import evaluated_geometry, i18n, model, operators, overlay, ui
 from mesh_annotation_layers.constants import EDGE, FACE, VERTEX
+
+
+class UILayoutProbe:
+    """Minimal UILayout stand-in that executes menu and panel draw code."""
+
+    def __init__(self):
+        self.entries = []
+        self.enabled = True
+
+    def row(self, **_kwargs):
+        return self
+
+    def column(self, **_kwargs):
+        return self
+
+    def box(self):
+        return self
+
+    def operator(self, operator_id, **kwargs):
+        properties = SimpleNamespace()
+        self.entries.append(("operator", operator_id, kwargs, properties))
+        return properties
+
+    def menu(self, menu_id, **kwargs):
+        self.entries.append(("menu", menu_id, kwargs, None))
+
+    def label(self, **kwargs):
+        self.entries.append(("label", None, kwargs, None))
+
+    def separator(self, **_kwargs):
+        self.entries.append(("separator", None, {}, None))
+
+    def prop(self, *_args, **_kwargs):
+        return None
+
+    def template_list(self, *_args, **_kwargs):
+        return None
 
 
 @contextmanager
@@ -158,6 +195,61 @@ def test_multi_layer_assignment_and_active_removal(obj):
         assert model.load_element_layers(settings, FACE)[str(target_index)] == [
             first_layer.layer_id
         ]
+        assert bpy.ops.mesh.annotation_assign_layer(
+            element_type=FACE,
+            layer_id=first_layer.layer_id,
+            make_active=True,
+        ) == {"FINISHED"}
+        assert model.active_layer(settings, FACE).layer_id == first_layer.layer_id
+    finally:
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+
+def test_flat_context_menu_and_sidebar_draw(obj):
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode="EDIT")
+    try:
+        bpy.context.tool_settings.mesh_select_mode = (False, False, True)
+        context_layout = UILayoutProbe()
+        fake_menu = SimpleNamespace(layout=context_layout)
+        ui.VIEW3D_MT_mesh_annotation_context.draw(fake_menu, bpy.context)
+
+        operator_ids = {
+            entry[1] for entry in context_layout.entries if entry[0] == "operator"
+        }
+        menu_ids = {
+            entry[1] for entry in context_layout.entries if entry[0] == "menu"
+        }
+        assert {
+            "mesh.annotation_assign_active",
+            "mesh.annotation_assign_new_layer",
+            "mesh.annotation_assign_loop",
+            "mesh.annotation_clear_selected",
+        } <= operator_ids
+        assert menu_ids == {
+            "VIEW3D_MT_mesh_annotation_assign_selected_existing",
+            "VIEW3D_MT_mesh_annotation_assign_loop_existing",
+        }
+
+        target_layout = UILayoutProbe()
+        fake_target_menu = SimpleNamespace(layout=target_layout)
+        ui.VIEW3D_MT_mesh_annotation_assign_selected_existing.draw(
+            fake_target_menu,
+            bpy.context,
+        )
+        target_operators = [
+            entry[3] for entry in target_layout.entries if entry[0] == "operator"
+        ]
+        assert target_operators
+        assert all(operator.make_active for operator in target_operators)
+
+        panel_layout = UILayoutProbe()
+        fake_panel = SimpleNamespace(layout=panel_layout)
+        fake_panel.draw_layer_workspace = types.MethodType(
+            ui.VIEW3D_PT_mesh_annotation.draw_layer_workspace,
+            fake_panel,
+        )
+        ui.VIEW3D_PT_mesh_annotation.draw(fake_panel, bpy.context)
     finally:
         bpy.ops.object.mode_set(mode="OBJECT")
 
@@ -432,6 +524,7 @@ def main():
         test_localization_modes_and_tooltips()
         obj, geometry, elapsed_ms = test_assignments_and_evaluated_geometry()
         test_multi_layer_assignment_and_active_removal(obj)
+        test_flat_context_menu_and_sidebar_draw(obj)
         test_button_operators(obj)
         test_cache_reuse(obj)
         test_clean_cache_skips_modifier_signature(obj)

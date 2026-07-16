@@ -572,6 +572,7 @@ class MESH_OT_annotation_assign_layer(LocalizedDescription, bpy.types.Operator):
     )
     layer_id: bpy.props.IntProperty()
     use_loop: bpy.props.BoolProperty(default=False)
+    make_active: bpy.props.BoolProperty(default=False, options={'HIDDEN'})
 
     @classmethod
     def poll(cls, context):
@@ -605,6 +606,12 @@ class MESH_OT_annotation_assign_layer(LocalizedDescription, bpy.types.Operator):
         ):
             self.report({"WARNING"}, tr('Select at least one element'))
             return {"CANCELLED"}
+        if self.make_active:
+            collection = get_layer_collection(settings, self.element_type)
+            for index, candidate in enumerate(collection):
+                if candidate.layer_id == layer.layer_id:
+                    set_active_index(settings, self.element_type, index)
+                    break
         tag_view3d_redraw(context)
         return {"FINISHED"}
 

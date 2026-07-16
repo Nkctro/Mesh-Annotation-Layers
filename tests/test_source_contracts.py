@@ -135,6 +135,25 @@ class SourceContractsTest(unittest.TestCase):
         self.assertIn('default="ACTIVE"', operator_source)
         self.assertIn('clear_op.mode = "ACTIVE"', panel_source)
 
+    def test_context_menu_is_mode_aware_and_flat(self):
+        ui_source = (PACKAGE / "ui.py").read_text(encoding="utf-8")
+        preferences_source = (PACKAGE / "preferences.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("infer_element_type_from_mode(context)", ui_source)
+        self.assertIn("draw_active_assignment(layout", ui_source)
+        self.assertIn("draw_clear_assignment(layout", ui_source)
+        self.assertNotIn("VIEW3D_MT_mesh_annotation_add", ui_source)
+        self.assertNotIn("VIEW3D_MT_mesh_annotation_remove", ui_source)
+        self.assertNotIn("MeshAnnotationTypeMenuBase", ui_source)
+        self.assertNotIn("context_menu_split_types", preferences_source)
+
+    def test_context_target_assignment_can_activate_the_layer(self):
+        operator_source = (PACKAGE / "operators.py").read_text(encoding="utf-8")
+        ui_source = (PACKAGE / "ui.py").read_text(encoding="utf-8")
+        self.assertIn("make_active: bpy.props.BoolProperty", operator_source)
+        self.assertIn("operator.make_active = True", ui_source)
+
 
 if __name__ == "__main__":
     unittest.main()

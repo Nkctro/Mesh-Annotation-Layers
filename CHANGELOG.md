@@ -13,6 +13,13 @@ All notable changes to the Mesh Annotation Layers addon will be documented in th
   icon-only layer controls and viewport overlay toggles.
 
 ### Changed
+- Flattened the Edit Mode context menu around the current face/edge/vertex
+  selection mode. Active-layer assignment, one-click layer creation, loop/path
+  assignment, and all removal modes are now direct actions; only choosing a
+  different target layer opens a submenu.
+- Selecting a target from the context menu now makes it active for subsequent
+  assignments, and the target-layer menu no longer calculates per-layer element
+  counts while opening.
 - Scoped dependency-graph invalidation to objects and modifier dependencies that
   can actually affect a cached overlay, eliminating rebuilds caused by unrelated
   scene edits.

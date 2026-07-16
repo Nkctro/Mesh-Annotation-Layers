@@ -81,6 +81,13 @@ Good naming examples:
 
 ## Common Operations
 
+### Fast Context Menu
+In Edit Mode, right-click and open **Mesh Annotation**. The menu automatically
+uses the current face, edge, or vertex selection mode. Adding to the active
+layer, creating a layer, assigning a loop/path, and removing annotations are
+one-click actions. **Add Selected/Loop to Another Layer** is the only nested
+choice; choosing a layer also makes it active for the next operation.
+
 ### Add a Layer
 Click `+` -> Layer appears with random color
 
