@@ -6,7 +6,6 @@ __pycache__/
 *.egg
 *.egg-info/
 dist/
-.beta_build_counter
 build/
 *.pyo
 *.pyd

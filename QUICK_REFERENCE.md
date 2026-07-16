@@ -1,200 +1,90 @@
-# Quick Reference Guide
+# Quick reference
 
-## Quick Start
+简体中文综合用户指南：[README.zh-CN.md](README.zh-CN.md)
 
-1. **Enter Edit Mode**: Select mesh -> Press `Tab`
-2. **Open Panel**: Press `N` -> Click "Annotation" tab
-3. **Add Layer**: Click `+` button
-4. **Select Elements**: Select vertices/edges/faces
-5. **Assign**: Click "Add Selected" to add the selection to the active layer
+## Open the workspace
 
-## Common Workflows
+1. Select a Mesh object.
+2. Press **N** in the 3D View.
+3. Open **Mesh Annotation**.
+4. Enter Edit Mode to modify assignments.
 
-### Workflow 1: Marking Different Topology Regions
+The Faces, Edges, and Vertices tabs also switch Blender's mesh selection mode
+while editing.
 
-```
-1. Add a new layer (click +)
-2. Rename it to "Region 1"
-3. Select faces in the first region
-4. Click "Assign Selected" to assign the faces
-5. Repeat for other regions with different layers
-```
+## Layer controls
 
-### Workflow 2: Edge Flow Annotation
+| Control | Result |
+| --- | --- |
+| + | Create a layer |
+| − | Delete the active layer and its assignments |
+| ▲ / ▼ | Change overlay order |
+| Eye | Toggle visibility |
+| Color swatch | Change layer color |
+| Name | Rename layer |
+| Overlay | Show or hide all annotation drawing |
+| Solo | Draw only each type's active layer |
 
-```
-1. Add layer named "Main Flow"
-2. Change color to blue
-3. Select edge loops for main flow
-4. Click "Assign Loop" to capture the loop
-5. Add layer "Secondary Flow" with different color
-6. Assign secondary edge loops
-```
+## Assignment
 
-### Workflow 3: Marking Problem Areas
+| Action | Result |
+| --- | --- |
+| Add Selected | Add the current selection to the active layer |
+| Add Loop | Derive a loop/path and add it to the active layer |
+| Selected → New Layer | Create a layer and assign the selection atomically |
+| Loop → New Layer | Create a layer and assign the derived loop atomically |
+| Select Layer | Select every element in the active layer |
+| Pick Layer | Activate the layer most used by the current selection |
+| Remove Selected From Active Layer | Preserve every non-active assignment |
 
-```
-1. Add layer "Needs Fixing"
-2. Change color to red
-3. Select problematic faces/vertices
-4. Click "Assign Selected" to store the elements
-5. Later: Click "Select Layer Elements" to quickly find them
-```
+Vertex mode also provides valence-based assignment. Face mode provides active
+and all-layer UV seam boundary actions.
 
-## Keyboard-Free Workflow
+## Edit Mode context menu
 
-All operations can be done with mouse clicks only:
-- Add/Remove layers: Click `+` or `-` buttons
-- Select layer: Click on layer name in list
-- Rename: Click on name, type, press Enter
-- Change color: Click color box -> Pick color
-- Toggle visibility: Click eye icon
-- Adjust overlay: Use the overlay controls for thickness, opacity, and offsets
+Right-click and open **Mesh Annotation**. The menu follows the current selection
+type and directly exposes:
 
-## Tips & Tricks
+- add selected/loop to the active layer;
+- create a new layer from selected/loop;
+- choose another existing target layer;
+- remove the active, top, or all assignments from selected elements.
 
-### Color Organization
+Only choosing another existing target opens a second submenu.
 
-Use color coding for different purposes:
-- **Red**: Areas that need attention
-- **Blue**: Main edge flows
-- **Green**: Completed areas
-- **Yellow**: UV seams
-- **Purple**: Special topology
+## Shared Mesh
 
-### Layer Naming Conventions
+A locked warning means more than one Object uses the active Mesh. Annotation
+writes are blocked. Overlay, Select Layer, and Pick Layer consume assignments
+only after the Object mapping is proven to match the current Mesh state. If
+native topology editing invalidated that proof, those assignments are
+quarantined. **Make Mesh Single User** then asks whether to trust current indices
+explicitly or discard stale assignments; automatic recovery never guesses.
 
-Good naming examples:
-- "Front Panel Quads"
-- "Back Edge Flow"
-- "UV Seam Edges"
-- "4-Point Poles"
-- "N-Gons to Fix"
+## Display
 
-### Efficiency Tips
+The collapsed **Display** panel contains:
 
-1. **Create template layers**: Set up common layers at the start
-2. **Use visibility toggle**: Hide layers you're not working on
-3. **Overlay controls**: Tune opacity, line width, and offsets to keep the mesh readable
-4. **Selection workflow**: Use "Select Layer Elements" to quickly work on specific areas
-5. **Clear and reuse**: Use "Clear Selected" to wipe a layer before repurposing it
+- Opacity
+- Show Through Mesh
+- Face, edge, and vertex surface offsets
+- Edge Thickness
+- Edge Shortening
+- Point Size
+- Debug Output
 
-## Common Operations
+## Shortcuts
 
-### Fast Context Menu
-In Edit Mode, right-click and open **Mesh Annotation**. The menu automatically
-uses the current face, edge, or vertex selection mode. Adding to the active
-layer, creating a layer, assigning a loop/path, and removing annotations are
-one-click actions. **Add Selected/Loop to Another Layer** is the only nested
-choice; choosing a layer also makes it active for the next operation.
+The extension does not install keymap entries. Use Blender's keymap preferences
+to bind operator search results if desired.
 
-### Add a Layer
-Click `+` -> Layer appears with random color
+## Troubleshooting
 
-### Remove a Layer
-Select layer -> Click `-` -> Layer and all data removed
-
-### Rename a Layer
-Click on layer name -> Type new name -> Press Enter
-
-### Change Layer Color
-Click color box -> Pick color -> Close picker
-
-### Hide/Show Layer
-Click eye icon next to layer name
-
-### Assign Selection to Active Layer
-Select elements -> Click "Assign Selected"
-
-### Assign Loop to Active Layer
-Select a loop seed -> Click "Assign Loop"
-
-### Create New Layer from Selection
-Select elements -> Click "Selected -> New Layer"
-
-### Create New Layer from Loop
-Select loop seed -> Click "Loop -> New Layer"
-
-### Remove Selection from Layer
-Select elements -> Click "Remove Selected"
-
-### Select All Layer Elements
-Make layer active -> Click "Select Layer Elements"
-
-### Clear Layer Assignments
-Make layer active -> Click "Clear Selected"
-
-### Pick Layer from Selection
-Select elements that already belong to a layer -> Click "Pick From Selection"
-
-### Mark Layer Seams
-In face mode -> Use "Mark Seams (Layer)" or "Mark Seams (All)" to convert assignments to UV seams
-
-### Adjust Overlay Display
-Open the Display subpanel to tweak thickness, whole-edge shortening, independent face/edge/vertex offsets, point size, opacity, and through-mesh visibility
-
-## Limitations
-
-- Assignments can only be changed in Edit Mode
-- Only works with mesh objects
-- One element type per layer (can't mix vertices and faces in same layer)
-- Overlays remain visible in Object, Weight Paint, Vertex Paint, Sculpt, and Texture Paint modes
-- Performance may decrease with very large meshes (100k+ faces)
-
-## Troubleshooting Quick Fixes
-
-| Problem | Quick Fix |
-|---------|-----------|
-| Can't see overlays | Check eye icon is on, increase opacity |
-| Can't assign elements | Make sure you're in Edit Mode |
-| Panel missing | Press N and make sure a mesh object is active |
-| Wrong elements selected | Check active layer and element type |
-
-## Advanced Usage
-
-### Multiple Objects
-
-Each mesh object has its own independent annotation layers. Switch between objects to see their respective layers.
-
-### Copying Layers Between Objects
-
-Currently not supported - layers are per-object. You'll need to manually recreate layers on each object.
-
-### Saving Work
-
-Annotation layers are automatically saved with your .blend file. No special save action needed.
-
-### Performance Optimization
-
-For very large meshes:
-- Use fewer layers
-- Assign fewer elements per layer
-- Hide layers you're not actively using
-- Lower the overlay opacity slightly
-
-## Integration with Other Tools
-
-### UV Editing
-Mark UV seams and islands with different layers for reference
-
-### Retopology
-Mark target edge flow before starting retopology work
-
-### Sculpting
-Mark areas in Edit Mode, then keep the same guides visible in Sculpt Mode
-
-### Weight Painting
-Mark deformation regions or edge flow in Edit Mode, then use the guides while painting weights
-
-### Modeling
-Mark different detail levels or regions for organized modeling
-
-## Video Tutorial Topics
-
-If creating tutorials, consider covering:
-1. Basic setup and first layer
-2. Color coding system
-3. Edge flow annotation
-4. Retopology workflow
-5. UV seam marking
-6. Team collaboration tips
+| Symptom | Check |
+| --- | --- |
+| Nothing is drawn | Overlay toggle, eye icon, opacity, and layer ownership |
+| Assignment is cancelled | Edit Mode, active layer, and non-empty selection |
+| Loop is refused | Select a connected, unambiguous seed |
+| Controls are locked | Make the Mesh single-user |
+| Overlap error | Reduce the number of layers on that element |
+| UI is stale after development edit | F3 > Reload Scripts |

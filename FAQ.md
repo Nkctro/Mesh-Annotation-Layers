@@ -1,236 +1,126 @@
-# Frequently Asked Questions (FAQ)
+# FAQ
 
-## General Questions
+简体中文综合用户指南：[README.zh-CN.md](README.zh-CN.md)
 
-### Q: What is Mesh Annotation Layers?
-**A:** It's a Blender addon that lets you create colored mesh-element layers in Edit Mode and keep them visible across modeling, sculpting, and paint workflows without modifying the actual mesh data.
+## Which Blender versions are supported?
 
-### Q: Is this addon free?
-**A:** Yes, it's released under the GPL-3.0 license and is completely free to use.
+The manifest requires Blender 4.2 or newer. Release validation should always
+state which versions were actually run, rather than treating a manifest check as
+a runtime test.
 
-### Q: Which Blender versions are supported?
-**A:** Blender 4.2 and above. Earlier versions are not supported because the addon targets the Blender Extensions platform.
+## Where is the interface?
 
-### Q: Can I change the add-on's language?
-**A:** Yes. Use the Language selector in the Mesh Annotation panel or the add-on preferences. Automatic follows Blender's interface language; unsupported languages fall back to English. English and Chinese can also be selected manually.
+Select a Mesh object and open the **Mesh Annotation** tab in the 3D View sidebar.
+Create and change assignments in Edit Mode. Existing overlays remain visible in
+Object, Sculpt, Weight Paint, Vertex Paint, and Texture Paint modes.
 
-### Q: Does it work with Blender 4.2+?
-**A:** Yes, the addon is designed for Blender 4.2 and future releases in the 4.x line.
+## Why are annotation controls locked?
 
----
+The active Mesh has more than one Object user. Durable annotations belong to
+each Object, but the topology-following edit stack belongs to the Mesh. Editing
+that shared stack could mix the two Objects' labels.
 
-## Installation Questions
+Click **Make Mesh Single User**. Automatic recovery proceeds only when the
+Object's JSON is proven to match the current topology and custom-data stack. If
+shared topology changed, the dialog requires an explicit choice: trust the
+current element indices or discard stale assignments. The operation supports
+Undo and never silently turns an unverified index into a permanent label.
+Proof also requires lossless JSON decoding and rejects any extra non-empty stack
+payload that is not owned by the Object mapping.
+Older files that were already shared before the proof token existed are also
+treated as unverified; this is intentional because their topology history
+cannot be reconstructed safely.
 
-### Q: How do I install the addon?
-**A:** See the [INSTALL.md](INSTALL.md) file for detailed installation instructions. The quick method is: Preferences → Add-ons → Install → Select `__init__.py` → Enable checkbox.
+## Can one element belong to several layers?
 
-### Q: Can I install it as a ZIP file?
-**A:** Yes, you can zip the `mesh_annotation_layers` folder and install the ZIP through Blender's addon preferences.
+Yes. Assigning another layer adds ownership instead of replacing existing
+ownership. The highest visible layer in the current layer order is drawn.
+Removing from the active layer reveals lower visible assignments.
 
-### Q: The addon doesn't appear in my addon list, why?
-**A:** Make sure you installed the entire `mesh_annotation_layers` folder (or the ZIP), not just the `__init__.py` file alone. Also check you're using Blender 4.2+.
+## What do active, top, and all removal mean?
 
----
+- Active removes only the chosen active layer.
+- Top removes the highest layer in the current order.
+- All removes every annotation from the selected elements.
 
-## Usage Questions
+The primary sidebar action uses Active so it does not accidentally erase other
+labels.
 
-### Q: Why can't I see the annotation panel?
-**A:** The panel only appears when:
-1. You have a mesh object selected
-2. The sidebar is open (press N)
-3. You're on the "Mesh Annotation" tab
+## How do I select or identify a layer?
 
-### Q: Can I use this in Object Mode?
-**A:** Existing annotations are visible and their layers can be managed in Object Mode. Switch to Edit Mode when you need to change which mesh elements belong to a layer.
+**Select Layer** selects all elements assigned to the active layer. **Pick
+Layer** examines the current selection and activates the layer with the highest
+usage count.
 
-### Q: Can I annotate multiple objects at once?
-**A:** No, each object has its own independent annotation layers. You need to work on objects one at a time.
+## How are loops detected?
 
-### Q: Why are my overlays not visible?
-**A:** Check:
-- The layer visibility (eye icon) is enabled
-- The main Overlay toggle is enabled
-- Opacity is not set to 0
-- The layer actually has elements assigned to it
+Select enough faces, edges, or vertices to disambiguate a continuous loop/path,
+then use **Add Loop**. Ambiguous, disconnected, or insufficient selections are
+rejected with a message instead of guessing.
 
-### Q: How do I change the overlay thickness or transparency?
-**A:** Open the Display subpanel to adjust edge thickness, whole-edge shortening, independent face/edge/vertex offsets, vertex size, opacity, and through-mesh visibility.
+## Can face layers become UV seams?
 
-### Q: Can I activate the right layer based on my current selection?
-**A:** Click "Pick From Selection" to activate the layer that already contains the selected elements.
+Yes. In the Faces workspace, use **Mark Seams (Layer)** or **Mark Seams (All)**.
+Only boundary edges are marked. Edge annotation layers are visual planning data
+and are not converted by those face-boundary tools.
 
-### Q: What's the quickest way to create a new layer from my selection?
-**A:** Use "Selected -> New Layer" for arbitrary selections or "Loop -> New Layer" when you need the detected loop in its own layer.
+## Why was an overlap assignment refused?
 
-### Q: Can I turn face layers into UV seams?
-**A:** In face mode, use "Mark Seams (Layer)" for the active layer or "Mark Seams (All)" to convert every face layer.
+Blender BMesh string custom layers have a 255-byte value limit. Version 1.3 uses
+a compact checksummed binary stack and preflights every write. If one element
+still has too many overlapping layer IDs, the operation is cancelled without
+partial changes. Remove unnecessary overlap before adding more.
 
-### Q: Can I mix vertices, edges, and faces in the same layer?
-**A:** No, each layer stores only one type of element. You can assign vertices, edges, OR faces to a layer, but not mix them. Create separate layers for different element types.
+## What happens to annotations after topology edits?
 
----
+The BMesh mirror follows mesh elements through Blender edit history. Geometry
+updates are coalesced briefly, then reconciled into durable JSON by a timer;
+viewport drawing itself is read-only. Explicit Select/Pick/write actions always
+force a complete stack check first, including in the same call flow before a
+dependency-graph update arrives. Undo/Redo clears derived caches and restores
+ownership from the history state.
 
-## Performance Questions
+For shared Mesh data, native Blender topology tools can still change the Mesh
+even though annotation writes are locked. A topology/custom-data mismatch
+quarantines the affected Object mapping: it is not drawn, selected, or used by
+automatic single-user recovery until the user resolves it.
 
-### Q: Will this slow down Blender?
-**A:** Normal redraws reuse GPU batches and do not rescan the mesh. A first build
-or a real geometry change still scales with the amount of visible annotation and
-evaluated modifier geometry. Very dense overlays on 100k+ elements can therefore
-take noticeable time to refresh, but unrelated scene edits and ordinary object
-movement do not rebuild local-space batches.
+## Why can the first overlay update lag slightly during active editing?
 
-### Q: How many layers can I create?
-**A:** Technically unlimited, but for performance reasons, it's recommended to use only the layers you actually need (typically 5-20 layers is plenty).
+Topology, coordinate, and selection updates can share the same dependency-graph
+signal. The extension debounces reconciliation for 150 ms to avoid a full stack
+scan on every event and schedules a final redraw after interaction stops.
 
-### Q: Does it affect render times?
-**A:** No, annotations are viewport-only overlays and have zero impact on rendering.
+## Do modifiers work?
 
----
+The overlay is drawn on evaluated geometry and has dedicated mapping paths for
+common Subdivision Surface and Mirror workflows. Unusual topology-generating
+modifier stacks should be tested on the target Blender version.
 
-## Data and Persistence Questions
+## How do I change language?
 
-### Q: Are annotations saved with my Blender file?
-**A:** Yes, all annotation layer data is saved with your .blend file automatically.
+Open **Edit > Preferences > Add-ons > Mesh Annotation Layers**. Choose Automatic,
+English, or Chinese. Automatic uses Chinese for supported Chinese locales and
+English otherwise.
 
-### Q: Can I export annotations?
-**A:** The annotations themselves are not exported (they're Blender-specific data), but the underlying mesh geometry is exported normally.
+## How do I develop or reload the extension?
 
-### Q: Will annotations affect my mesh export (FBX, OBJ, etc.)?
-**A:** No, annotations don't modify the mesh in any way and won't affect exports.
+Use a dedicated local extension repository and link the
+mesh_annotation_layers source directory into it. Then use **F3 > Reload
+Scripts** after edits. See [INSTALL.md](INSTALL.md); do not copy source into
+Blender's managed user_default directory.
 
-### Q: Can I share annotation layers between files?
-**A:** Currently, you need to manually recreate layers in each file. Copying the entire object may preserve layers.
+## How is a release built?
 
-### Q: What happens if I delete a mesh object with annotations?
-**A:** The annotation data is deleted along with the object. Make sure to save your file if you want to keep the annotations.
+Only Blender's official extension commands are used:
 
----
+    blender --command extension validate mesh_annotation_layers
 
-## Technical Questions
+    blender --command extension build --source-dir mesh_annotation_layers --output-dir dist
 
-### Q: Does this modify my mesh data?
-**A:** No, it only stores element indices and draws overlays. Your mesh geometry, materials, and vertex colors remain untouched.
+Install and validate the generated archive before release.
 
-### Q: Can I use this with modifiers?
-**A:** Yes, annotations work with the base mesh and are independent of modifiers.
+## Is commercial use allowed?
 
-### Q: Does it work with sculpt mode or other modes?
-**A:** Yes. Existing overlays remain visible in Object, Weight Paint, Vertex Paint, Sculpt, and Texture Paint modes. Element assignment remains limited to Edit Mode so topology edits stay explicit.
-
-### Q: Can I use this in Blender's geometry nodes?
-**A:** No, this is a separate annotation system and doesn't integrate with geometry nodes.
-
-### Q: Does it support undo/redo?
-**A:** Yes, all operations support Blender's standard undo/redo system (Ctrl+Z / Ctrl+Shift+Z).
-
----
-
-## Compatibility Questions
-
-### Q: Does it work with other addons?
-**A:** Yes, it should work alongside other addons without conflicts as it uses its own data structures.
-
-### Q: Can I use it with the built-in annotation tools?
-**A:** Yes, these are separate systems. The built-in annotation tool is for drawing, while this addon is for mesh element annotation.
-
-### Q: Does it work on Linux/Mac/Windows?
-**A:** Yes, it's platform-independent and works on all platforms that support Blender.
-
----
-
-## Workflow Questions
-
-### Q: What's the best way to organize layers?
-**A:** Use consistent naming and color coding. For example:
-- Red for problems
-- Blue for main flow
-- Green for completed areas
-- Yellow for UV seams
-
-### Q: Can I animate layer visibility?
-**A:** No, layer properties are not animatable as this is a modeling/topology tool, not an animation tool.
-
-### Q: How do I copy layer settings to another object?
-**A:** Currently not supported. You'll need to manually recreate layers on each object.
-
-### Q: Can I import layer presets?
-**A:** Not currently supported, but this could be a feature in future versions.
-
----
-
-## Troubleshooting
-
-### Q: I'm getting errors when enabling the addon
-**A:** Check:
-- You're using Blender 4.2 or higher
-- You have Python installed correctly (comes with Blender)
-- Look at the Blender console for specific error messages
-- Try restarting Blender
-
-### Q: The overlays look weird/glitchy
-**A:** Try:
-- Updating your graphics drivers
-- Checking if other overlays work in Blender
-- Reducing the number of elements assigned to layers
-- Lowering the opacity
-
-### Q: Colors don't show up correctly
-**A:** Make sure:
-- Opacity is above 0
-- Layer visibility is enabled
-- You're in Edit Mode
-- The color isn't too similar to your viewport background
-
----
-
-## Feature Requests
-
-### Q: Can you add feature X?
-**A:** Please open an issue on the GitHub repository with your feature request. We welcome community input!
-
-### Q: Will there be more features in the future?
-**A:** Yes, we plan to continue developing the addon based on user feedback.
-
-### Q: Can I contribute to the addon?
-**A:** Yes! The addon is open source. See CONTRIBUTING.md for guidelines (if available).
-
----
-
-## Support
-
-### Q: Where can I get help?
-**A:** 
-- Check this FAQ
-- Read the README.md and QUICK_REFERENCE.md
-- Open an issue on GitHub
-- Check the Blender Artists forum
-
-### Q: I found a bug, where do I report it?
-**A:** Please open an issue on the GitHub repository with:
-- Blender version
-- Addon version
-- Steps to reproduce
-- Screenshots if applicable
-
-### Q: Can I request a feature?
-**A:** Yes, please open a feature request issue on GitHub.
-
----
-
-## Miscellaneous
-
-### Q: Can I use this for commercial projects?
-**A:** Yes, the GPL-3.0 license allows commercial use.
-
-### Q: Do I need to credit the addon in my work?
-**A:** Not required, but appreciated! The annotations don't export anyway.
-
-### Q: Can I modify the addon for my needs?
-**A:** Yes, it's open source under GPL-3.0. Feel free to modify it, and consider contributing improvements back to the project.
-
-### Q: Is there a video tutorial?
-**A:** Check the GitHub repository README for links to video tutorials (if available).
-
----
-
-**Still have questions?** Open an issue on GitHub or check the documentation files in the repository.
+Yes, under GPL-3.0-or-later. Distribution and modification must comply with that
+license; the complete text is in [LICENSE](LICENSE).

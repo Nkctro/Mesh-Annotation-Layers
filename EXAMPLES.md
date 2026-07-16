@@ -51,11 +51,11 @@ This document provides practical examples of how to use Mesh Annotation Layers i
 **Goal**: Plan and mark UV seams before unwrapping.
 
 **Steps**:
-1. Create layer "UV Seams" (Bright Red)
-2. Switch to edge select mode
-3. Select edges where you want seams
-4. Assign to "UV Seams" layer
-5. Add another layer "UV Islands" (Different colors) for island boundaries
+1. Create face layers for the intended UV islands
+2. Assign each island's faces to its layer
+3. Refine the colored boundaries while modeling
+4. Use "Mark Seams (Layer)" or "Mark Seams (All)" when ready
+5. Keep an edge layer as an optional visual note for individual candidate edges
 
 **Benefits**:
 - Visualize seam placement before committing
@@ -241,11 +241,13 @@ Each serves a different purpose and can coexist in the same file.
 
 ## Performance Notes
 
-For each example:
-- **Small meshes** (< 10k faces): No performance concerns
-- **Medium meshes** (10k-50k faces): Good performance with many layers
-- **Large meshes** (50k-100k faces): Use fewer layers, hide when not needed
-- **Very large meshes** (> 100k faces): Use sparingly, focus on specific areas
+Performance depends on Blender version, modifiers, GPU/driver, annotation density,
+and how often topology changes. Hide unneeded layers, disable the overlay during
+heavy topology work, and benchmark the actual production mesh instead of relying
+on a face-count threshold.
+
+When two Objects share one Mesh, annotations remain visible but editing is
+read-only. Use "Make Mesh Single User" before changing assignments.
 
 ---
 

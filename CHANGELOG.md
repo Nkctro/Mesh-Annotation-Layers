@@ -4,6 +4,8 @@ All notable changes to the Mesh Annotation Layers addon will be documented in th
 
 # [Unreleased]
 
+# [1.3.0] - 2026-07-16
+
 ### Added
 - Keep annotations visible in Object, Weight Paint, Vertex Paint, Sculpt, and Texture Paint modes; assignment tools remain safely limited to Edit Mode.
 - Added face/edge/vertex workspace tabs that synchronize Blender's mesh selection mode when editing.
@@ -13,6 +15,13 @@ All notable changes to the Mesh Annotation Layers addon will be documented in th
   icon-only layer controls and viewport overlay toggles.
 
 ### Changed
+- Converted the repository into a directly valid Blender Extension source tree:
+  `mesh_annotation_layers/` now contains both `blender_manifest.toml` and
+  `__init__.py`, so the official validate/build commands work without repacking.
+- Reload all extension submodules in dependency order when Blender runs Reload
+  Scripts, eliminating stale operators, panels, data models, and overlay code.
+- Removed legacy `bl_info` metadata and unused file/network permissions; the
+  extension manifest is now the single metadata source.
 - Flattened the Edit Mode context menu around the current face/edge/vertex
   selection mode. Active-layer assignment, one-click layer creation, loop/path
   assignment, and all removal modes are now direct actions; only choosing a
@@ -41,17 +50,59 @@ All notable changes to the Mesh Annotation Layers addon will be documented in th
 - Changed defaults to disable through-mesh display, use 7 px edges and 10 px points, and offset faces, edges, and points by 0.0001.
 - Keep cached annotation geometry during vertex/texture paint strokes when paint data cannot drive deformation.
 - Reuse sparse JSON layer assignments during coordinate-only edits instead of rescanning every mesh element and custom-data stack.
+- Keep the persisted proof sparse after normal writes, while validating every
+  non-empty custom-data payload before shared Object data is trusted.
 - Refresh evaluated overlays adaptively during mesh and sculpt interaction, prioritizing input responsiveness and scheduling a final redraw automatically.
 - Split the former single-file implementation into focused constants, localization,
   model, evaluated-geometry, overlay, loop, property, operator, and UI modules.
 - Replaced mutable element metadata dictionaries with validated immutable element specifications.
-- Made registration transactional so partial Blender registration failures clean themselves up.
+- Kept registration transactional while reducing it to the normal Blender
+  enable, disable, failure-cleanup, and Reload Scripts lifecycle.
 - Package every Python module instead of assuming a single-file add-on.
 - Language selection in the add-on preferences offers Automatic, English, and
   Chinese; Automatic follows Blender and falls back to English when the interface
   language has no add-on translation.
+- Replaced comma-separated BMesh ownership values with a versioned, checksummed
+  unsigned-varint stack that fails before Blender's 255-byte string limit can
+  truncate data; legacy values remain readable.
+- Made shared Mesh annotations explicitly read-only and added a single-user
+  recovery action. Shared mappings now require a topology/custom-data proof;
+  stale mappings are quarantined and recovery requires an explicit keep/discard
+  choice instead of silently trusting element indices.
+- Made discard recovery operate per element type, so a stale face mapping does
+  not erase independently verified edge or vertex assignments.
+- Excluded Blender's Fake User and Extra User retention flags from shared-Mesh
+  detection and topology reconciliation while still locking data used by
+  multiple real owners.
+- Coalesced indistinguishable Edit Mode geometry events for 150 ms, then
+  reconciled BMesh ownership even when topology counts did not change.
+- Initialize new BMesh ownership layers sparsely, skip decoding empty payloads,
+  and keep synchronized/quarantined signatures in one bounded state cache.
+- Consolidated repeated operator properties, loop dispatch, create-and-assign
+  rollback, evaluated-edge mapping, and reconciliation finalization.
+- Removed obsolete loop helpers, compatibility fields, stale translations, and
+  the custom packaging scripts; Blender's Extension CLI is now the only release
+  builder.
+- Added the full GPL-3.0-or-later license to the extension source so official
+  build artifacts distribute it automatically.
 
 ### Fixed
+- Preflight the complete final mapping before any BMesh/RNA mutation and roll
+  back payloads, JSON, caches, proof state, collection cursors, active indices,
+  and ID hints when a commit fails. Any Mesh state that cannot be confirmed as
+  restored is quarantined instead of treated as synchronized.
+- Merge topology ownership into private snapshots so an incomplete/unsavable
+  legacy stack cannot poison the decoded cache or be marked synchronized.
+- Force stack reconciliation before every explicit model read/write, closing the
+  same-call-flow window before dependency-graph dirty notifications arrive.
+- Keep viewport drawing read-only; the debounced topology timer owns durable
+  JSON reconciliation.
+- Roll back the classes and Object property accepted during a failed
+  registration attempt.
+- Verify the RNA fixed type of `Object.mesh_annotations`; a foreign same-name
+  property is preserved and reported instead of accepted or deleted.
+- Quarantine malformed, non-object, or lossy annotation JSON instead of treating
+  it as a safely empty shared mapping.
 - Make the primary remove-selected action affect only the active layer, preserving any other annotations assigned to the same mesh elements; explicit top-layer and all-layer removal remain available in the context menu.
 - Treat Undo and Redo as complete overlay-cache boundaries, then restore annotation ownership from the mesh custom-data layers so labels cannot drift onto stale element indices.
 - Keep annotation colors visually stable across selection changes by removing selection-dependent brightness boosts and additive blending.
@@ -64,6 +115,16 @@ All notable changes to the Mesh Annotation Layers addon will be documented in th
 - Added repeatable source-contract and Blender integration smoke tests for future refactors.
 - Restored manual language selection for extensions installed under Blender's
   `bl_ext.<repository>.<extension>` namespace.
+- Prevented annotation JSON from being overwritten by another Object that shares
+  the same Mesh data.
+- Prevented malformed or silently truncated BMesh stacks from being interpreted
+  as a valid empty assignment.
+- Detect equal-count topology replacement through dirty edit-mesh boundaries
+  instead of relying only on vertex/edge/face counts.
+- Clear every identity-keyed cache before loading or factory-resetting a file.
+- Make teardown best-effort across menus, handlers, timers, draw handles,
+  properties, and classes so an already-removed resource cannot strand the
+  extension in a half-registered state.
 
 # [1.1.5] - 2025-11-02
 
@@ -72,14 +133,6 @@ All notable changes to the Mesh Annotation Layers addon will be documented in th
 - Added a retopology-specific depth bias so annotations stay visible with “Show Through Mesh” disabled while still respecting occlusion.
 - Draw annotations on modifier-evaluated geometry so face, edge, and vertex layers follow Subdivision Surface and Mirror + Subdivision results.
 - Cache evaluated overlay batches and read only annotated subdivision ranges, avoiding full evaluated-mesh rebuilds on every viewport redraw.
-
-# [1.1.3] - 2025-11-02
-
-### Added
-- Optional "Propagate On New Geometry" toggle to control whether extruded or duplicated geometry copies existing annotations.
-
-### Fixed
-- Newly created geometry no longer inherits annotations when propagation is disabled, preventing accidental layer carry-over.
 
 # [1.1.2] - 2025-10-31
 

@@ -3,7 +3,6 @@
 import bpy
 
 from .constants import EDGE, FACE, VERTEX
-from .model import active_layer
 from .overlay import tag_surface_offset_redraw, tag_view3d_redraw
 
 
@@ -161,12 +160,12 @@ class MeshAnnotationSettings(bpy.types.PropertyGroup):
     edge_layers_data: bpy.props.StringProperty(default="{}")
     vertex_layers_data: bpy.props.StringProperty(default="{}")
 
-    color_seed_face: bpy.props.FloatProperty(default=0.0)
-    color_seed_edge: bpy.props.FloatProperty(default=0.0)
-    color_seed_vertex: bpy.props.FloatProperty(default=0.0)
-
-    def active_layer(self, element_type=FACE):
-        return active_layer(self, element_type)
+    # A digest of the last proven JSON/BMesh/topology state.  It prevents an
+    # Object-local index mapping from being trusted after its Mesh is shared
+    # and changed by Blender's native topology tools.
+    face_annotation_state: bpy.props.StringProperty(default="", options={'HIDDEN'})
+    edge_annotation_state: bpy.props.StringProperty(default="", options={'HIDDEN'})
+    vertex_annotation_state: bpy.props.StringProperty(default="", options={'HIDDEN'})
 
 
 CLASSES = (MeshAnnotationLayer, MeshAnnotationSettings)

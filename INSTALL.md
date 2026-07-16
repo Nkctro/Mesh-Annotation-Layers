@@ -1,70 +1,90 @@
-# Installation Guide
+# Installation and development
 
-## Method 1: Install from ZIP (Recommended)
+简体中文综合用户指南：[README.zh-CN.md](README.zh-CN.md)
 
-1. Create a distribution ZIP file:
-   ```bash
-   python3 package.py
-   ```
-   This creates a file like `dist/mesh_annotation_layers_v1.1.1_YYYYMMDD.zip`
+## Install a release
 
-2. Open Blender (version 4.2 or higher)
-3. Go to `Edit` > `Preferences` > `Add-ons`
-4. Click the `Install...` button
-5. Navigate to the `dist` folder and select the ZIP file
-6. Click `Install Add-on`
-7. Enable the addon by checking the checkbox next to "Mesh: Mesh Annotation Layers"
+Mesh Annotation Layers 1.3 requires Blender 4.2 or newer.
 
-## Method 2: Manual Installation from Repository
+1. Open **Edit > Preferences > Get Extensions**.
+2. Open the repository menu and choose **Install from Disk...**.
+3. Select the official extension ZIP.
+4. Enable **Mesh Annotation Layers** if needed.
+5. Select a mesh and open the **Mesh Annotation** sidebar tab.
 
-1. Clone or download this repository:
-   ```bash
-   git clone https://github.com/Nkctro/Mesh-Annotation-Layers.git
-   ```
+The archive must contain blender_manifest.toml and __init__.py at the extension
+root. A GitHub source archive is not necessarily an installable extension
+archive; use a release artifact built by Blender.
 
-2. Locate your Blender addons directory:
-   - **Windows**: `%APPDATA%\Blender Foundation\Blender\<version>\scripts\addons\`
-   - **macOS**: `/Users/$USER/Library/Application Support/Blender/<version>/scripts/addons/`
-   - **Linux**: `~/.config/blender/<version>/scripts/addons/`
+## Development setup
 
-3. Copy the entire `mesh_annotation_layers` folder from the repository to the addons directory
+Follow Blender's
+[Add-on Development Setup](https://developer.blender.org/docs/handbook/extensions/addon_dev_setup/)
+workflow. Keep source control outside Blender-managed extension directories and
+use a dedicated local extension repository.
 
-4. Restart Blender or refresh the addons list
+1. Clone this project to a normal development directory.
+2. In Blender's Extensions preferences, add a local repository whose directory
+   is outside Blender's managed user_default repository.
+3. Link this project's mesh_annotation_layers directory into that local
+   repository under the same directory name.
+4. Enable the extension from **Preferences > Add-ons**.
+5. After editing Python, use **F3 > Reload Scripts**.
 
-5. Go to `Edit` > `Preferences` > `Add-ons`
+Windows PowerShell example (Developer Mode or elevated privileges may be
+required):
 
-6. Search for "Mesh Annotation Layers"
+    New-Item -ItemType SymbolicLink -Path D:\BlenderExtensionDev\mesh_annotation_layers -Target E:\GIT\Mesh-Annotation-Layers\mesh_annotation_layers
 
-7. Enable the addon by checking the checkbox
+macOS/Linux example:
 
-## Verifying Installation
+    ln -s /path/to/Mesh-Annotation-Layers/mesh_annotation_layers /path/to/BlenderExtensionDev/mesh_annotation_layers
 
-1. Create or select a mesh object in Blender
-2. Enter Edit Mode (press Tab)
-3. Press N to open the sidebar
-4. You should see an "Annotation" tab
-5. Click on the Annotation tab to access the addon panel
+Remove the development link manually when finished. Do not use Blender's
+extension uninstall action as a substitute for unlinking a source checkout.
 
-## Troubleshooting
+The entry point detects a real module reload, unregisters a still-active old
+runtime before reloading submodules, and restores registration only for a
+manual Python reload. Blender's normal Reload Scripts flow already unregisters
+the extension first and therefore does not double-register it.
 
-**Addon doesn't appear in the list:**
-- Make sure you've copied the entire `mesh_annotation_layers` folder (not just the `__init__.py` file)
-- Check that the folder is in the correct addons directory
-- Restart Blender
+## Validate and build
 
-**Panel doesn't show up:**
-- Make sure you're in Edit Mode with a mesh object selected
-- Press N to toggle the sidebar visibility
-- Check that the addon is enabled in Preferences
+The mesh_annotation_layers directory is the complete extension source. From the
+repository root:
 
-**Errors when enabling:**
-- Check that you're using Blender 4.2 or higher
-- Look at the Blender console for error messages
-- Make sure all files in the addon folder are intact
+    blender --command extension validate mesh_annotation_layers
 
-## Uninstallation
+    blender --command extension build --source-dir mesh_annotation_layers --output-dir dist
 
-1. Go to `Edit` > `Preferences` > `Add-ons`
-2. Find "Mesh: Mesh Annotation Layers"
-3. Click the checkbox to disable it
-4. Click the `Remove` button to completely uninstall
+Validate the generated archive as well:
+
+    blender --command extension validate dist/mesh_annotation_layers-1.3.0.zip
+
+Exact archive naming follows the Blender version used to build it. The project
+does not maintain a second packaging implementation; the official Blender
+command is the release authority.
+
+## Automated checks
+
+Source contracts:
+
+    python -m unittest discover -s tests -p "test_*.py" -v
+
+Blender runtime smoke test:
+
+    blender --background --factory-startup --python tests/blender_smoke.py
+
+The runtime suite covers registration and teardown, assignments, multiple
+ownership, evaluated overlays, cache invalidation, shared-Mesh isolation,
+capacity handling, history restoration, and reload behavior.
+
+## Clean-install release check
+
+1. Start Blender with factory settings or a disposable user configuration.
+2. Install the newly built ZIP with **Install from Disk...**.
+3. Enable it and verify the sidebar plus Edit Mode context menu.
+4. Run face, edge, and vertex create/assign/select/remove workflows.
+5. Save and reopen a .blend file.
+6. Disable and re-enable the extension, then run **Reload Scripts**.
+7. Confirm the system console contains no traceback.

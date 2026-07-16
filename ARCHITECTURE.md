@@ -1,126 +1,132 @@
-# Mesh Annotation Layers architecture
+# Architecture
 
-## Design goals
+## Boundaries
 
-The add-on keeps annotation data independent from materials and renders it on the
-modifier-evaluated surface. The implementation is organized around three rules:
-
-1. Feature modules own one responsibility.
-2. Dependencies point from Blender-facing code toward the data model, never back
-   from the model into the UI.
-3. Expensive evaluated geometry is rebuilt only when geometry or display inputs
-   actually change.
-
-## Package layout
+Mesh Annotation Layers is a Blender 4.2+ Extension. The complete extension
+source is mesh_annotation_layers/: its blender_manifest.toml, __init__.py,
+Python modules, and LICENSE are built together by Blender's official CLI.
 
 | Module | Responsibility |
 | --- | --- |
-| `__init__.py` | Transactional registration and unregistration |
-| `constants.py` | Immutable element-type specifications |
-| `i18n.py` | Language selection, translation catalog, safe formatting |
-| `model.py` | Layer storage, JSON validation, BMesh synchronization, assignments |
-| `evaluated_geometry.py` | Source-to-evaluated geometry mapping and edge-chain trimming |
-| `overlay.py` | GPU batches, cache policy, drawing, and handler lifecycle |
-| `loops.py` | Face-loop, edge-loop, and vertex-path derivation |
-| `properties.py` | Blender property groups and display defaults |
-| `operators.py` | User actions and validation |
-| `ui.py` | Context menus, layer list, and sidebar panels |
+| constants.py | Immutable element-type specifications |
+| i18n.py | Translation catalog and language resolution |
+| model.py | Durable data, BMesh mirror, validation, and transactions |
+| evaluated_geometry.py | Source-to-evaluated geometry mapping |
+| loops.py | Face/edge/vertex loop and path derivation |
+| overlay.py | Dependency handlers, bounded caches, GPU batching, drawing |
+| properties.py | Blender RNA property groups |
+| operators.py | User actions, write guard, and localized error reporting |
+| preferences.py | Add-on preferences |
+| ui.py | Sidebar and Edit Mode context menu |
+| __init__.py | Hot reload and registration lifecycle |
 
-The entry point contains no feature logic. Registration order is explicit:
-preferences, property groups, operators, then UI classes. If any step fails, all
-already-registered state is removed before the exception is re-raised.
+Dependencies point from Blender-facing operators/UI toward the model. Model
+logic is not duplicated in panels or menu callbacks.
 
-## Data model
+## Data ownership
 
-Each mesh object owns a `MeshAnnotationSettings` pointer. Faces, edges, and
-vertices have separate layer collections, active indices, ID counters, and
-serialized index-to-layer mappings.
+Each Object owns MeshAnnotationSettings. Every element type has:
 
-The serialized JSON mapping is the durable source of truth:
+- a layer collection and active index;
+- a monotonic next-ID hint;
+- a validated JSON map from element index to ordered layer IDs.
+- a proof token binding that JSON to the last matching topology and BMesh stack.
 
-```text
-element index -> ordered list of layer IDs
-```
+JSON is the durable per-object source of truth. While editing, each Mesh element
+also carries a compact string stack. The BMesh mirror lets assignments follow
+topology and Blender Undo/Redo.
 
-BMesh integer and string custom-data layers mirror that state while editing so
-topology operations can carry assignments with mesh elements. Input JSON is
-validated field by field; malformed keys and layer IDs are ignored instead of
-breaking operators or panel drawing.
+Because BMesh custom data belongs to Mesh while JSON belongs to Object, a Mesh
+with several users is annotation-read-only. Before a shared mapping is consumed,
+its JSON, persisted proof token, current topology, and custom-data stack are
+validated together. A mismatch quarantines that element type: draw and selection
+cannot use the stale indices. **Make Mesh Single User** rebuilds automatically
+only for a verified mapping; otherwise the user must explicitly trust current
+indices or discard assignments.
+
+The persisted fingerprint is sparse: it hashes global element counts plus only
+annotated indices, their current payloads, and their local vertex/connectivity
+identity, so normal writes scale with annotation density. Before a shared mapping
+is trusted, a read-only full-stack comparison also proves that no untracked,
+missing, or damaged payload exists. Explicit single-user reads and writes perform
+the same complete reconciliation for correctness.
+
+## Stack encoding and transactions
+
+Blender silently truncates BMesh string values beyond 255 bytes. The 1.3 stack
+format contains:
+
+    magic | version | item count | positive unsigned varints | CRC32
+
+Empty and invalid are distinct. A truncated header, unsupported version,
+non-positive/duplicate ID, trailing data, or checksum mismatch is invalid and
+cannot erase JSON. Malformed, non-object, or lossy JSON is likewise quarantined
+instead of being treated as a valid empty mapping. Legacy comma-separated stacks
+remain readable; a prefix that matches known longer JSON is treated as historical
+truncation.
+
+The complete final mapping is encoded and serialized before BMesh layer creation
+or assignment updates. The commit records old BMesh payloads, JSON, cache and
+proof state and attempts to restore them if a later phase fails. New-layer
+operators also restore the collection, active index, and next-ID hint when
+assignment fails. A Mesh state that cannot be confirmed as restored loses its
+synchronized status and is quarantined instead of being replayed automatically.
+
+## Topology synchronization
+
+Counts alone cannot detect deletion/recreation that leaves the same number of
+vertices, edges, and faces. Every explicit model read/write force-checks the
+complete stack, so correctness never waits for an asynchronous dependency-graph
+event. Geometry updates are still coalesced for 150 ms for background syncing.
+The timer commits durable JSON; viewport drawing only consumes a private snapshot
+and never writes RNA data.
+
+Undo/Redo invalidates all derived ownership and overlay state so restored BMesh
+custom data is read again. load_pre clears every identity-keyed mapping,
+signature, geometry, and GPU cache before Blender replaces its ID database.
 
 ## Overlay pipeline
 
-```text
-source annotations
-    -> sparse source index filters
-    -> evaluated mesh from Blender dependency graph
-    -> source-to-evaluated face/edge/vertex mapping
-    -> offset and whole-edge trimming
-    -> one GPU batch per element kind/layer
-    -> cached viewport draw
-```
+    object JSON ownership
+      -> sparse source filters
+      -> evaluated mesh
+      -> source-to-evaluated face/edge/vertex mapping
+      -> local-space offsets and edge-chain trimming
+      -> per-layer GPU batches
+      -> viewport draw
 
-Subdivision Surface and Mirror are handled on evaluated geometry. Vertex
-positions are derived from topology-aware edge-chain intersections, avoiding
-assumptions about evaluated vertex ordering. Edge shortening applies to the two
-ends of a complete source-edge chain, not to every subdivision segment.
+GPU batches, evaluated local geometry, decoded JSON, and usage counts have
+separate bounded caches. This allows color/opacity changes and many transforms
+to avoid expensive remapping. Dependency entries include the object, mesh, and
+modifier pointer dependencies so unrelated scene updates do not dirty a cache.
 
-## Cache policy
+Interactive modes reuse a still-valid previous batch for a short interval based
+on measured build cost and schedule a final redraw. Paint updates reuse geometry
+only when visible modifiers cannot consume that painted data.
 
-The runtime uses bounded, weighted caches keyed by Blender object or settings
-identity. Decoded annotation mappings, usage counts, local evaluated geometry,
-and GPU batches have separate lifetimes so a style-only change does not force
-source-to-evaluated remapping.
+## Lifecycle
 
-- Normal redraws reuse existing GPU batches without rescanning modifier RNA.
-- Dependency-graph updates dirty only caches that depend on the updated Blender ID.
-- Face, point, and default edge batches stay in local coordinates, so ordinary
-  object transforms are applied at draw time.
-- Mapping fallbacks calculate only the annotated element kinds and source
-  neighbourhoods required by the current overlay.
-- Coordinate edits use a build-cost-aware interval to bound main-thread work.
-- Vertex/texture paint data updates reuse geometry when paint cannot deform it.
-- Weight paint reuses geometry only when no visible modifier consumes weights.
-- A timer schedules the final redraw after throttled interaction.
+The entry point uses the extension package name and relative imports. On a real
+module reload, a registered old runtime is fully unregistered before submodules
+are reloaded; normal Blender Reload Scripts has already unregistered it and is
+not registered twice.
 
-Cache ownership and dependency-graph handlers live entirely in `overlay.py`.
+Registration records each class only after Blender accepts it and unwinds the
+completed steps if setup fails. Teardown removes the menu, draw handler,
+dependency/history/load handlers, timers, Object property, and classes in
+dependency order. Stale handlers/menu callbacks are identified by module and
+function name, not only object identity. The Object property check verifies the
+RNA pointer's fixed type; teardown never deletes a foreign same-name property.
 
-## Localization
+## Verification focus
 
-English messages are stable keys in `i18n.py`; Chinese translations exist only
-in the central `ZH_CN` catalog. Other modules call:
+Tests cover source contracts plus Blender background behavior:
 
-```python
-tr("Marked {count} edges", count=count)
-```
-
-The formatter tolerates a malformed or incomplete translation and falls back
-without crashing Blender UI drawing. Dynamic element and mode labels are also
-resolved through catalog keys rather than carrying language pairs.
-
-Language preferences use the complete Python package name so Blender extension
-namespaces resolve correctly. Automatic mode maps supported Chinese locales to
-Chinese and every other locale to English. Operator hover text is resolved at
-hover time through `LocalizedDescription`, so manual language changes apply
-immediately without re-registering Blender classes.
-
-## Extension boundaries
-
-- Add a mesh element type by extending `ElementSpec` and then implementing its
-  model, overlay, operator, and UI behavior.
-- Add a user-visible message only in English at the call site and add its Chinese
-  value to `ZH_CN`.
-- Add a new drawing invalidation source inside `overlay.py`; UI/property modules
-  should only request `tag_view3d_redraw()`.
-- Keep Blender operator IDs stable unless the interaction itself is intentionally
-  redesigned.
-
-## Verification
-
-Release validation covers:
-
-- Python syntax compilation for every module;
-- Blender background registration/unregistration;
-- face, edge, and vertex assignment round trips;
-- evaluated Subdivision Surface overlay generation;
-- cache reuse and paint-mode invalidation behavior;
-- archive contents and clean installation from the generated ZIP.
+- registration, external draw-handle removal, disable/enable, and reload;
+- face/edge/vertex assignment and overlapping ownership;
+- binary round-trip, corruption rejection, capacity preflight, and legacy read;
+- shared-Mesh topology quarantine and explicit recovery choices;
+- equal-count immediate-write reconciliation, Undo/Redo, and load boundaries;
+- cross-element capacity rollback and incomplete-merge cache isolation;
+- evaluated geometry, cache scope/reuse, and context/panel draw;
+- official manifest validation, build, archive inspection, and archive validation.

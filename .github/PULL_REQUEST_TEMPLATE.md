@@ -27,6 +27,10 @@ Fixes #(issue number)
 - [ ] Tested with different mesh types (faces, edges, vertices)
 - [ ] Tested layer creation and deletion
 - [ ] Tested selection and annotation features
+- [ ] Tested shared-Mesh refusal and single-user recovery (when storage changes)
+- [ ] Tested disable/enable and Reload Scripts (when lifecycle code changes)
+- [ ] Ran source contracts and Blender background smoke tests
+- [ ] Ran official extension validate/build/archive-validate
 - [ ] Tested with different Blender versions
 
 ## Screenshots (if applicable)
@@ -35,7 +39,7 @@ Fixes #(issue number)
 ## Checklist
 - [ ] My code follows the code style of this project
 - [ ] I have performed a self-review of my own code
-- [ ] I have commented my code, particularly in hard-to-understand areas
+- [ ] Non-obvious invariants are documented without narrating obvious code
 - [ ] I have made corresponding changes to the documentation
 - [ ] My changes generate no new warnings
 - [ ] I have tested my changes in Blender

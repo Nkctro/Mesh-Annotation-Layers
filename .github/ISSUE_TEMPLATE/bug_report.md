@@ -25,9 +25,14 @@ What actually happened.
 If applicable, add screenshots to help explain your problem.
 
 ## Environment
-- Blender Version: [e.g. 3.6.0]
-- Addon Version: [e.g. 1.1.0]
+- Blender Version: [e.g. 4.2.12 or 5.1.2]
+- Extension Version: [e.g. 1.3.0]
 - OS: [e.g. Windows 11, macOS 13, Ubuntu 22.04]
+- Install Method: [release ZIP, local development repository]
+- Mesh Users: [single-user or shared by N objects]
+
+## Console Output
+Paste the complete traceback or relevant debug output. Remove private paths if needed.
 
 ## Additional Context
 Add any other context about the problem here.

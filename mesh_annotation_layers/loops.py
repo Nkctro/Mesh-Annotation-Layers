@@ -3,14 +3,9 @@
 import bmesh
 import bpy
 
-from .constants import EDGE, FACE, VERTEX, element_spec
+from .constants import EDGE, FACE, VERTEX
 from .i18n import tr
 from .model import debug_log, ensure_lookup_tables
-
-
-def element_labels(element_type: str):
-    meta = element_spec(element_type)
-    return meta.selection_label, meta.loop_label, meta.label
 
 
 def collect_face_loop_faces(context, obj, bm, settings):
@@ -26,8 +21,8 @@ def collect_face_loop_faces(context, obj, bm, settings):
 
     def gather_loop(face, other, edge):
         loop = set()
-        loop |= _walk_face_loop(face, other, edge, set())
-        loop |= _walk_face_loop(other, face, edge, set())
+        loop |= _walk_face_loop(face, other, edge)
+        loop |= _walk_face_loop(other, face, edge)
         loop.add(face)
         loop.add(other)
         return loop
@@ -83,14 +78,13 @@ def collect_face_loop_faces(context, obj, bm, settings):
     return final_loop, None
 
 
-def _walk_face_loop(start_face, previous_face, shared_edge, visited_faces):
+def _walk_face_loop(start_face, previous_face, shared_edge):
     loop = set()
     current_face = start_face
     prev_face = previous_face
     incoming_edge = shared_edge
     while current_face not in loop:
         loop.add(current_face)
-        visited_faces.add(current_face)
         opposite_edge = _find_opposite_edge(current_face, incoming_edge)
         if opposite_edge is None:
             break
@@ -114,51 +108,6 @@ def _find_opposite_edge(face: bmesh.types.BMFace, incoming_edge: bmesh.types.BME
         if incoming_vertices.isdisjoint({v.index for v in edge.verts}):
             return edge
     return None
-
-
-def is_pole_edge(edge: bmesh.types.BMEdge) -> bool:
-    return any(len(vert.link_edges) != 4 for vert in edge.verts)
-
-
-def _walk_edge_loop_direction(start_edge: bmesh.types.BMEdge, start_face: bmesh.types.BMFace):
-    sequence = [start_edge]
-    current_edge = start_edge
-    current_face = start_face
-    while True:
-        if current_face is None or len(current_face.edges) != 4:
-            break
-        if is_pole_edge(current_edge):
-            break
-        opposite = _find_opposite_edge(current_face, current_edge)
-        if opposite is None or opposite in sequence:
-            break
-        sequence.append(opposite)
-        if is_pole_edge(opposite):
-            break
-        next_face = next((f for f in opposite.link_faces if f is not current_face), None)
-        if next_face is None:
-            break
-        current_edge = opposite
-        current_face = next_face
-    return sequence
-
-
-def compute_edge_loop(seed_edge: bmesh.types.BMEdge):
-    faces = list(seed_edge.link_faces)
-    if not faces:
-        return [seed_edge]
-    if len(faces) == 1:
-        return _walk_edge_loop_direction(seed_edge, faces[0])
-    forward = _walk_edge_loop_direction(seed_edge, faces[0])
-    backward = _walk_edge_loop_direction(seed_edge, faces[1])
-    combined = list(reversed(forward[1:])) + [seed_edge] + backward[1:]
-    ordered = []
-    seen = set()
-    for edge in combined:
-        if edge not in seen:
-            seen.add(edge)
-            ordered.append(edge)
-    return ordered
 
 
 def _select_loop_via_builtin(context, obj, element_type: str):
@@ -210,9 +159,6 @@ def _select_loop_via_builtin(context, obj, element_type: str):
     finally:
         if tool_settings.mesh_select_mode != original_mode:
             tool_settings.mesh_select_mode = original_mode
-    return True, None
-
-
 def collect_edge_loop_edges(context, obj, bm, settings):
     ensure_lookup_tables(bm, EDGE)
     bm.edges.ensure_lookup_table()

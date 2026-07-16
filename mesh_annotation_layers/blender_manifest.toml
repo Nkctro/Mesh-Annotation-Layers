@@ -1,0 +1,23 @@
+schema_version = "1.0.0"
+
+id = "mesh_annotation_layers"
+version = "1.3.0"
+name = "Mesh Annotation Layers"
+tagline = "Organize mesh selections into colored annotation layers"
+maintainer = "Nkctro <nkctro@users.noreply.github.com>"
+type = "add-on"
+
+blender_version_min = "4.2.0"
+
+license = [
+  "SPDX:GPL-3.0-or-later",
+]
+
+website = "https://github.com/Nkctro/Mesh-Annotation-Layers"
+
+tags = [
+  "3D View",
+  "Mesh",
+  "Modeling",
+  "User Interface",
+]

@@ -7,7 +7,7 @@ reference that key; translations never leak into feature logic.
 import bpy
 
 
-ADDON_PACKAGE = __package__ or "mesh_annotation_layers"
+ADDON_PACKAGE = __package__
 
 
 ZH_CN = {
@@ -30,8 +30,6 @@ ZH_CN = {
     "Always display the add-on in English.": "始终使用英语显示插件。",
     "Always display the add-on in Chinese.": "始终使用中文显示插件。",
     "Automatic language: {language}": "自动语言：{language}",
-    "Auto follows Blender's interface language.": "自动模式会同步 Blender 的界面语言",
-    "Type Selection Submenu": "右键添加类型子菜单",
     "No layers": "暂无图层",
     "Choose Target Layer": "选择目标标签",
     "No Active Layer": "无活动标签",
@@ -45,23 +43,6 @@ ZH_CN = {
     "Remove Selected from {name}": "从「{name}」移除选中",
     "Remove Top Annotation from Selected": "移除选中的顶层标签",
     "Remove All Annotations from Selected": "移除选中的全部标签",
-    "Choose Element Type": "选择元素类型",
-    "No action configured": "未配置操作",
-    "Unsupported action": "未支持的操作",
-    "Assign Selected to Active Layer": "将选中分配到当前层",
-    "Assign Selected to New Layer": "将选中新建图层",
-    "Assign Selected to Existing Layer": "添加选中到已有图层",
-    "Assign Loop to Active Layer": "将循环分配到当前层",
-    "Assign Loop to New Layer": "将循环分配到新图层",
-    "Assign Loop to Existing Layer": "循环添加到已有图层",
-    "Clear Selected (All Layers)": "清除选中（全部图层）",
-    "Clear Selected (Top Layer)": "清除选中（顶部图层）",
-    "Clear Selected (Active Layer)": "清除选中（活动图层）",
-    "Add": "添加",
-    "Remove": "删除",
-    "Selected Elements": "选中元素",
-    "Loops / Paths": "循环 / 路径",
-    "Remove Selected": "删除选中",
     "Select at least two faces to define the loop": "请选择至少两个面来确定循环",
     "Unable to derive a face loop from the selection": "无法根据选择推导出面循环",
     "No face loop passes through every selected face": "没有一个面循环能够覆盖所有已选面",
@@ -78,6 +59,7 @@ ZH_CN = {
     "Remove Annotation Layer": "移除标注图层",
     "Reorder Annotation Layer": "调整图层顺序",
     "Assign Selection to Active Layer": "将选中元素分配到当前层",
+    "Assign Loop to Active Layer": "将循环分配到当前层",
     "Select Elements in Layer": "选择图层元素",
     "Pick Active Layer From Selection": "从选择中激活图层",
     "Annotate Vertices by Valence": "按度数标注顶点",
@@ -92,7 +74,6 @@ ZH_CN = {
     "Switch to Edit Mode to change annotation assignments": "切换到编辑模式以调整标注分配",
     "Mesh Annotation": "网格标注",
     "Display": "显示设置",
-    "Select a mesh object": "请选择一个网格对象",
     "No active layer selected": "未选择图层",
     "Select at least one element": "请至少选择一个元素",
     "Layer is empty": "图层内没有元素",
@@ -103,8 +84,6 @@ ZH_CN = {
     "Failed to assign vertices": "标注失败",
     "Nothing assigned; new layer cancelled": "没有元素分配，已取消创建新图层",
     "Annotated {count} vertices": "已标注 {count} 个顶点",
-    "Layer Name": "图层名称",
-    "Color": "颜色",
     "No seams updated": "未更新缝合边",
     "Marked {count} edges": "已标记 {count} 条边",
     "Switch to Edit Mode to use annotations": "请进入编辑模式以使用标注",
@@ -133,8 +112,36 @@ ZH_CN = {
     "Valence → New Layer": "度数 → 新图层",
     "Mark Seams (Layer)": "当前层缝合",
     "Mark Seams (All)": "全部层缝合",
-    "Remove Annotations From Selected": "移除选中元素的标注",
     "Remove Selected From Active Layer": "从活动图层移除选中",
+    "Shared or linked mesh data is read-only for annotations": "共享或链接网格的标注为只读",
+    "Make Mesh Single User": "将网格转为单用户",
+    "Make the active object's mesh data single-user before editing annotations.": (
+        "编辑标注前，将活动物体的网格数据转为单用户。"
+    ),
+    "Too many overlapping layers on one mesh element": "单个网格元素上的重叠图层过多",
+    "Annotation storage is invalid; no changes were made": "标注存储无效，未进行任何更改",
+    "Mesh was detached, but Edit Mode could not be restored": "网格已分离，但无法恢复编辑模式",
+    "Shared topology changed or cannot be verified": "共享拓扑已变化或无法验证",
+    "Choose how to resolve the Object-local assignments.": "请选择如何处理物体本地的标注分配。",
+    "Shared topology changed; choose a recovery mode before detaching": (
+        "共享拓扑已变化；分离前请选择恢复方式"
+    ),
+    "Shared topology changed; detach or resolve stale assignments": (
+        "共享拓扑已变化；请分离网格或处理失效分配"
+    ),
+    "Recovery": "恢复方式",
+    "Verified Only": "仅在验证通过时保留",
+    "Keep assignments only when their current topology identity is proven": (
+        "仅当当前拓扑身份可以验证时保留分配"
+    ),
+    "Keep Object Assignments": "保留物体分配",
+    "Explicitly trust the Object's current element indices": (
+        "明确采用当前物体的元素索引"
+    ),
+    "Discard Assignments": "丢弃分配",
+    "Keep layer definitions but clear every stale element assignment": (
+        "保留图层定义，但清除全部失效的元素分配"
+    ),
     "Opacity": "整体透明度",
     "Show Through Mesh": "穿透显示",
     "Surface Offset": "表面偏移",

@@ -4,9 +4,9 @@ import bpy
 
 from .constants import EDGE, ELEMENT_TYPES, FACE, VERTEX, element_spec
 from .i18n import tr
-from .loops import element_labels
 from .model import (
     active_layer,
+    annotation_mesh_is_shared,
     count_elements_for_layer,
     get_layer_collection,
     infer_element_type_from_mode,
@@ -14,10 +14,7 @@ from .model import (
 
 
 def draw_existing_layer_menu(layout, obj, element_type: str, use_loop: bool):
-    settings = getattr(obj, "mesh_annotations", None)
-    if not settings:
-        layout.label(text=tr('No layers'))
-        return
+    settings = obj.mesh_annotations
     collection = get_layer_collection(settings, element_type)
     if not collection:
         layout.label(text=tr('No layers'))
@@ -93,7 +90,6 @@ def draw_new_layer_assignment(layout, element_type: str, *, use_loop: bool):
     )
     operator.element_type = element_type
     operator.use_loop = use_loop
-    operator.skip_dialog = True
 
 
 def draw_clear_assignment(layout, element_type: str, layer, mode: str):
@@ -132,8 +128,10 @@ class MESH_UL_annotation_layers(bpy.types.UIList):
             )
             visibility.element_type = layer.element_type
             visibility.layer_id = layer.layer_id
-            row.prop(layer, "color", text="")
-            row.prop(layer, "name", text="", emboss=False)
+            editor = row.row(align=True)
+            editor.enabled = not annotation_mesh_is_shared(context.object)
+            editor.prop(layer, "color", text="")
+            editor.prop(layer, "name", text="", emboss=False)
         elif self.layout_type == "GRID":
             layout.alignment = "CENTER"
             layout.label(text=layer.name)
@@ -148,6 +146,17 @@ class VIEW3D_MT_mesh_annotation_context(bpy.types.Menu):
         obj = context.object
         if not obj or obj.type != "MESH" or context.mode != "EDIT_MESH":
             layout.label(text=tr('Switch to Edit Mode to use annotations'), icon="INFO")
+            return
+        if annotation_mesh_is_shared(obj):
+            layout.label(
+                text=tr("Shared or linked mesh data is read-only for annotations"),
+                icon="LOCKED",
+            )
+            layout.operator(
+                "mesh.annotation_make_single_user",
+                text=tr("Make Mesh Single User"),
+                icon="DUPLICATE",
+            )
             return
         element_type = infer_element_type_from_mode(context)
         meta = element_spec(element_type)
@@ -203,6 +212,7 @@ class VIEW3D_PT_mesh_annotation(bpy.types.Panel):
         layout.use_property_decorate = False
         obj = context.object
         settings = obj.mesh_annotations
+        mesh_is_shared = annotation_mesh_is_shared(obj)
 
         toolbar = layout.row(align=True)
         toolbar.operator(
@@ -236,6 +246,18 @@ class VIEW3D_PT_mesh_annotation(bpy.types.Panel):
             )
             tab.element_type = element_type
 
+        if mesh_is_shared:
+            linked = layout.box()
+            linked.label(
+                text=tr("Shared or linked mesh data is read-only for annotations"),
+                icon="LOCKED",
+            )
+            linked.operator(
+                "mesh.annotation_make_single_user",
+                text=tr("Make Mesh Single User"),
+                icon="DUPLICATE",
+            )
+
         if context.mode != "EDIT_MESH":
             mode_labels = {
                 "OBJECT": "Object Mode",
@@ -255,10 +277,26 @@ class VIEW3D_PT_mesh_annotation(bpy.types.Panel):
                 text=tr('Switch to Edit Mode to Edit'),
             )
 
-        self.draw_layer_workspace(layout, context, obj, settings, active_element_type)
+        self.draw_layer_workspace(
+            layout,
+            context,
+            obj,
+            settings,
+            active_element_type,
+            editable=not mesh_is_shared,
+        )
 
-    def draw_layer_workspace(self, parent_layout, context, obj, settings, element_type):
-        selection_label = tr(element_labels(element_type)[0])
+    def draw_layer_workspace(
+        self,
+        parent_layout,
+        context,
+        obj,
+        settings,
+        element_type,
+        *,
+        editable=True,
+    ):
+        selection_label = tr(element_spec(element_type).selection_label)
         box = parent_layout.box()
         row = box.row()
         row.template_list(
@@ -271,6 +309,7 @@ class VIEW3D_PT_mesh_annotation(bpy.types.Panel):
             rows=4,
         )
         col = row.column(align=True)
+        col.enabled = editable
         op_add = col.operator("mesh.annotation_layer_add", icon="ADD", text="")
         op_add.element_type = element_type
         op_remove = col.operator("mesh.annotation_layer_remove", icon="REMOVE", text="")
@@ -316,8 +355,10 @@ class VIEW3D_PT_mesh_annotation(bpy.types.Panel):
                 )
                 picker.element_type = element_type
 
-            box.separator(factor=0.5)
-            row_assign = box.row(align=True)
+            actions = box.column()
+            actions.enabled = editable
+            actions.separator(factor=0.5)
+            row_assign = actions.row(align=True)
             row_assign.enabled = layer is not None
             assign_active = row_assign.operator(
                 "mesh.annotation_assign_active",
@@ -329,7 +370,7 @@ class VIEW3D_PT_mesh_annotation(bpy.types.Panel):
                 text=tr('Add Loop'),
             )
             assign_loop.element_type = element_type
-            row_new = box.row(align=True)
+            row_new = actions.row(align=True)
             new_layer = row_new.operator(
                 "mesh.annotation_assign_new_layer",
                 text=tr("Selected → New Layer"),
@@ -337,7 +378,6 @@ class VIEW3D_PT_mesh_annotation(bpy.types.Panel):
             )
             new_layer.element_type = element_type
             new_layer.use_loop = False
-            new_layer.skip_dialog = True
             new_loop = row_new.operator(
                 "mesh.annotation_assign_new_layer",
                 text=tr("Loop → New Layer"),
@@ -345,16 +385,15 @@ class VIEW3D_PT_mesh_annotation(bpy.types.Panel):
             )
             new_loop.element_type = element_type
             new_loop.use_loop = True
-            new_loop.skip_dialog = True
             if element_type == VERTEX:
-                valence_row = box.row(align=True)
+                valence_row = actions.row(align=True)
                 valence_row.prop(settings, "auto_valence_n", text=tr('Valence'))
                 valence_op = valence_row.operator(
                     "mesh.annotation_assign_valence",
                     text=tr('Annotate'),
                 )
                 valence_op.valence = settings.auto_valence_n
-                valence_new_row = box.row(align=True)
+                valence_new_row = actions.row(align=True)
                 valence_new = valence_new_row.operator(
                     "mesh.annotation_assign_valence_new_layer",
                     text=tr("Valence → New Layer"),
@@ -362,7 +401,7 @@ class VIEW3D_PT_mesh_annotation(bpy.types.Panel):
                 )
                 valence_new.valence = settings.auto_valence_n
             if element_type == FACE:
-                seam_row = box.row(align=True)
+                seam_row = actions.row(align=True)
                 seam_row.operator(
                     "mesh.annotation_mark_seam_active_face_layer",
                     text=tr('Mark Seams (Layer)'),
@@ -373,8 +412,8 @@ class VIEW3D_PT_mesh_annotation(bpy.types.Panel):
                     text=tr('Mark Seams (All)'),
                     icon="MOD_UVPROJECT",
                 )
-            box.separator(factor=0.5)
-            clear_op = box.operator(
+            actions.separator(factor=0.5)
+            clear_op = actions.operator(
                 "mesh.annotation_clear_selected",
                 text=tr('Remove Selected From Active Layer'),
                 icon="REMOVE",
@@ -449,11 +488,24 @@ CLASSES = (
 
 
 def register():
+    _remove_context_menu_callbacks()
     bpy.types.VIEW3D_MT_edit_mesh_context_menu.append(draw_context_menu)
 
 
 def unregister():
-    try:
-        bpy.types.VIEW3D_MT_edit_mesh_context_menu.remove(draw_context_menu)
-    except (RuntimeError, ValueError):
-        pass
+    _remove_context_menu_callbacks()
+
+
+def _remove_context_menu_callbacks():
+    menu = bpy.types.VIEW3D_MT_edit_mesh_context_menu
+    identity = draw_context_menu.__module__, draw_context_menu.__name__
+    callbacks = tuple(getattr(getattr(menu, "draw", None), "_draw_funcs", ()))
+    for callback in callbacks:
+        if callback is draw_context_menu or (
+            getattr(callback, "__module__", None),
+            getattr(callback, "__name__", None),
+        ) == identity:
+            try:
+                menu.remove(callback)
+            except (RuntimeError, ValueError):
+                pass

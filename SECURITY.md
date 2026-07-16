@@ -1,32 +1,36 @@
-# Security Policy
+# Security policy
 
-## Supported Versions
+## Supported versions
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 1.1.1   | :white_check_mark: |
+| Version | Security fixes |
+| --- | --- |
+| 1.3.x | Supported |
+| 1.2.x and older | Unsupported |
 
-## Reporting a Vulnerability
+Use the latest 1.3 patch release with a Blender version still supported by the
+Blender project.
 
-If you discover a security vulnerability in the Mesh Annotation Layers addon, please report it by:
+## Scope
 
-1. **Creating a GitHub Security Advisory** (preferred): Go to the Security tab → Advisories → New Draft
-2. **Email**: Contact the repository maintainer directly through GitHub
+Mesh Annotation Layers runs inside Blender with the current user's privileges.
+Version 1.3 requests no extension permissions and performs no network access,
+external process execution, dynamic code download, clipboard access, or
+arbitrary file read/write.
 
-### What to Include
+Release archives are produced by Blender's official extension builder from the
+mesh_annotation_layers source directory. Do not install untrusted repackaged
+archives.
 
-- Description of the vulnerability
-- Steps to reproduce
-- Potential impact
-- Suggested fix (if any)
+## Reporting a vulnerability
 
-### Response Timeline
+Do not open a public issue for an exploitable vulnerability. Contact the
+maintainer at the address in blender_manifest.toml and include:
 
-- We will acknowledge receipt within 48 hours
-- We will provide an initial assessment within 1 week
-- We will work on a fix and release a patch as soon as possible
+- affected extension and Blender versions;
+- operating system;
+- minimal reproduction;
+- impact and whether a crafted .blend or archive is required;
+- suggested embargo needs.
 
-### Disclosure Policy
-
-- Please allow us reasonable time to fix the vulnerability before public disclosure
-- We will credit you in the fix announcement unless you prefer to remain anonymous
+Non-security crashes, data-integrity bugs, and performance problems can use the
+public bug template.
