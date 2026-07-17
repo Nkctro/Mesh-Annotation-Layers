@@ -21,13 +21,13 @@ each Object, but the topology-following edit stack belongs to the Mesh. Editing
 that shared stack could mix the two Objects' labels.
 
 Click **Make Mesh Single User**. Automatic recovery proceeds only when the
-Object's JSON is proven to match the current topology and custom-data stack. If
+Object's JSON agrees with the current topology and custom-data stack. If
 shared topology changed, the dialog requires an explicit choice: trust the
 current element indices or discard stale assignments. The operation supports
 Undo and never silently turns an unverified index into a permanent label.
-Proof also requires lossless JSON decoding and rejects any extra non-empty stack
+The compatibility check also requires lossless JSON decoding and rejects any extra non-empty stack
 payload that is not owned by the Object mapping.
-Older files that were already shared before the proof token existed are also
+Older files that were already shared before the compatibility token existed are also
 treated as unverified; this is intentional because their topology history
 cannot be reconstructed safely.
 
@@ -93,9 +93,9 @@ scan on every event and schedules a final redraw after interaction stops.
 
 ## Do modifiers work?
 
-The overlay is drawn on evaluated geometry and has dedicated mapping paths for
-common Subdivision Surface and Mirror workflows. Unusual topology-generating
-modifier stacks should be tested on the target Blender version.
+The overlay uses evaluated geometry for index-preserving modifiers and supported
+Subdivision Surface stacks. Mirror and unknown topology-generating stacks fall
+back to the edit cage instead of guessing element ownership.
 
 ## How do I change language?
 
@@ -112,13 +112,8 @@ Blender's managed user_default directory.
 
 ## How is a release built?
 
-Only Blender's official extension commands are used:
-
-    blender --command extension validate mesh_annotation_layers
-
-    blender --command extension build --source-dir mesh_annotation_layers --output-dir dist
-
-Install and validate the generated archive before release.
+Only Blender's official extension commands are used. Follow the single build and
+archive-validation procedure in [INSTALL.md](INSTALL.md#validate-and-build).
 
 ## Is commercial use allowed?
 

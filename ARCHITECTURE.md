@@ -30,7 +30,8 @@ Each Object owns MeshAnnotationSettings. Every element type has:
 - a layer collection and active index;
 - a monotonic next-ID hint;
 - a validated JSON map from element index to ordered layer IDs.
-- a proof token binding that JSON to the last matching topology and BMesh stack.
+- a compatibility token recording the last agreement among JSON, topology, and
+  the BMesh stack.
 
 JSON is the durable per-object source of truth. While editing, each Mesh element
 also carries a compact string stack. The BMesh mirror lets assignments follow
@@ -38,13 +39,13 @@ topology and Blender Undo/Redo.
 
 Because BMesh custom data belongs to Mesh while JSON belongs to Object, a Mesh
 with several users is annotation-read-only. Before a shared mapping is consumed,
-its JSON, persisted proof token, current topology, and custom-data stack are
+its JSON, persisted compatibility token, current topology, and custom-data stack are
 validated together. A mismatch quarantines that element type: draw and selection
 cannot use the stale indices. **Make Mesh Single User** rebuilds automatically
 only for a verified mapping; otherwise the user must explicitly trust current
 indices or discard assignments.
 
-The persisted fingerprint is sparse: it hashes global element counts plus only
+The persisted compatibility token is sparse: it hashes global element counts plus only
 annotated indices, their current payloads, and their local vertex/connectivity
 identity, so normal writes scale with annotation density. Before a shared mapping
 is trusted, a read-only full-stack comparison also proves that no untracked,
@@ -67,7 +68,7 @@ truncation.
 
 The complete final mapping is encoded and serialized before BMesh layer creation
 or assignment updates. The commit records old BMesh payloads, JSON, cache and
-proof state and attempts to restore them if a later phase fails. New-layer
+compatibility state and attempts to restore them if a later phase fails. New-layer
 operators also restore the collection, active index, and next-ID hint when
 assignment fails. A Mesh state that cannot be confirmed as restored loses its
 synchronized status and is quarantined instead of being replayed automatically.
@@ -99,6 +100,8 @@ GPU batches, evaluated local geometry, decoded JSON, and usage counts have
 separate bounded caches. This allows color/opacity changes and many transforms
 to avoid expensive remapping. Dependency entries include the object, mesh, and
 modifier pointer dependencies so unrelated scene updates do not dirty a cache.
+Only index-preserving and supported Subdivision Surface stacks use evaluated
+mapping; Mirror and unknown topology generators fall back to the edit cage.
 
 Interactive modes reuse a still-valid previous batch for a short interval based
 on measured build cost and schedule a final redraw. Paint updates reuse geometry

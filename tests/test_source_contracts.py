@@ -1,4 +1,5 @@
 import ast
+import re
 import tomllib
 import unittest
 from pathlib import Path
@@ -16,48 +17,80 @@ def translation_catalog():
     for node in parse(PACKAGE / "i18n.py").body:
         if not isinstance(node, ast.Assign):
             continue
-        is_catalog = any(
+        if not any(
             isinstance(target, ast.Name) and target.id == "ZH_CN"
             for target in node.targets
-        )
-        if is_catalog:
-            return {
-                key.value
-                for key in node.value.keys
-                if isinstance(key, ast.Constant)
-            }
+        ):
+            continue
+        return {
+            key.value
+            for key in node.value.keys
+            if isinstance(key, ast.Constant)
+        }
     return set()
 
 
-DYNAMIC_TRANSLATION_KEYS = {
-    "Face Layers",
-    "Edge Layers",
-    "Vertex Layers",
-    "faces",
-    "edges",
-    "vertices",
-    "face loop",
-    "edge loop",
-    "vertex path",
-    "Automatic",
-    "English",
-    "Chinese",
-    "Use Blender's interface language; unsupported languages use English.",
-    "Always display the add-on in English.",
-    "Always display the add-on in Chinese.",
-    "Faces",
-    "Edges",
-    "Vertices",
-    "Object Mode",
-    "Weight Paint",
-    "Vertex Paint",
-    "Sculpt Mode",
-    "Texture Paint",
-}
+def assigned_node(path, name):
+    for node in ast.walk(parse(path)):
+        if not isinstance(node, ast.Assign):
+            continue
+        if any(
+            isinstance(target, ast.Name) and target.id == name
+            for target in node.targets
+        ):
+            return node.value
+    return None
 
 
-def used_translation_keys():
-    used = set(DYNAMIC_TRANSLATION_KEYS)
+def dynamic_translation_keys():
+    """Extract keys passed to tr() through production metadata and UI maps."""
+
+    used = set()
+    for node in ast.walk(parse(PACKAGE / "constants.py")):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "ElementSpec"
+        ):
+            continue
+        for keyword in node.keywords:
+            if (
+                keyword.arg in {"label", "selection_label", "loop_label"}
+                and isinstance(keyword.value, ast.Constant)
+                and isinstance(keyword.value.value, str)
+            ):
+                used.add(keyword.value.value)
+
+    language_items = assigned_node(PACKAGE / "i18n.py", "LANGUAGE_ITEM_KEYS")
+    if language_items is not None:
+        for _identifier, label, description in ast.literal_eval(language_items):
+            used.update((label, description))
+
+    ui_tree = parse(PACKAGE / "ui.py")
+    for mapping_name in ("tab_labels", "mode_labels"):
+        mapping_node = next(
+            (
+                node.value
+                for node in ast.walk(ui_tree)
+                if isinstance(node, ast.Assign)
+                and any(
+                    isinstance(target, ast.Name) and target.id == mapping_name
+                    for target in node.targets
+                )
+            ),
+            None,
+        )
+        if mapping_node is not None:
+            used.update(
+                value.value
+                for value in mapping_node.values
+                if isinstance(value, ast.Constant) and isinstance(value.value, str)
+            )
+    return used
+
+
+def literal_translation_keys():
+    used = set()
     for path in PACKAGE.glob("*.py"):
         for node in ast.walk(parse(path)):
             literal_translation = (
@@ -102,31 +135,39 @@ class SourceContractsTest(unittest.TestCase):
                     definitions[name] = node.lineno
 
     def test_translation_catalog_covers_literal_keys(self):
-        catalog = translation_catalog()
-        used = used_translation_keys()
-        self.assertEqual(set(), used - catalog)
+        dynamic_keys = dynamic_translation_keys()
+        self.assertTrue(dynamic_keys)
+        used = literal_translation_keys() | dynamic_keys
+        self.assertEqual(set(), used - translation_catalog())
 
-    def test_translation_catalog_has_no_stale_keys(self):
-        self.assertEqual(set(), translation_catalog() - used_translation_keys())
+    def test_entry_point_lists_every_runtime_module(self):
+        module_names = ast.literal_eval(
+            assigned_node(PACKAGE / "__init__.py", "_SUBMODULE_NAMES")
+        )
+        expected = {
+            path.stem
+            for path in PACKAGE.glob("*.py")
+            if path.name != "__init__.py"
+        }
+        self.assertEqual(expected, set(module_names))
 
     def test_every_operator_has_a_localized_tooltip(self):
         catalog = translation_catalog()
-        tree = parse(PACKAGE / "operators.py")
-        for node in tree.body:
+        for node in parse(PACKAGE / "operators.py").body:
             if not isinstance(node, ast.ClassDef):
                 continue
             is_operator = any(
                 isinstance(base, ast.Attribute) and base.attr == "Operator"
                 for base in node.bases
             )
-            uses_mixin = any(
-                isinstance(base, ast.Name) and base.id == "LocalizedDescription"
-                for base in node.bases
-            )
             if not is_operator:
                 continue
             self.assertTrue(
-                uses_mixin,
+                any(
+                    isinstance(base, ast.Name)
+                    and base.id == "LocalizedDescription"
+                    for base in node.bases
+                ),
                 f"{node.name} does not use LocalizedDescription",
             )
             tooltip = next(
@@ -146,29 +187,6 @@ class SourceContractsTest(unittest.TestCase):
             self.assertIsNotNone(tooltip, f"{node.name} has no tooltip_key")
             self.assertIn(tooltip, catalog, f"{node.name} tooltip is not translated")
 
-    def test_legacy_inline_translation_pairs_are_gone(self):
-        for path in PACKAGE.glob("*.py"):
-            self.assertNotIn("bi(", path.read_text(encoding="utf-8"))
-
-    def test_language_modes_are_auto_english_and_chinese_only(self):
-        source = (PACKAGE / "i18n.py").read_text(encoding="utf-8")
-        self.assertNotIn('"BOTH"', source)
-        self.assertNotIn('partition(".")', source)
-
-    def test_language_selector_lives_only_in_addon_preferences(self):
-        panel_source = (PACKAGE / "ui.py").read_text(encoding="utf-8")
-        preferences_source = (PACKAGE / "preferences.py").read_text(
-            encoding="utf-8"
-        )
-        self.assertNotIn('"language_display"', panel_source)
-        self.assertIn('layout.prop(self, "language_display"', preferences_source)
-
-    def test_entry_point_stays_small(self):
-        line_count = len(
-            (PACKAGE / "__init__.py").read_text(encoding="utf-8").splitlines()
-        )
-        self.assertLess(line_count, 180)
-
     def test_extension_source_layout_and_release_manifest(self):
         manifest_path = PACKAGE / "blender_manifest.toml"
         self.assertTrue(manifest_path.is_file())
@@ -176,92 +194,24 @@ class SourceContractsTest(unittest.TestCase):
         self.assertFalse((ROOT / "blender_manifest.toml").exists())
         with manifest_path.open("rb") as manifest_file:
             manifest = tomllib.load(manifest_file)
-        self.assertEqual("1.3.0", manifest["version"])
         self.assertEqual("mesh_annotation_layers", manifest["id"])
+        self.assertRegex(manifest["version"], re.compile(r"^\d+\.\d+\.\d+$"))
         self.assertNotIn("permissions", manifest)
+        changelog_versions = re.findall(
+            r"^# \[(\d+\.\d+\.\d+)\]",
+            (ROOT / "CHANGELOG.md").read_text(encoding="utf-8"),
+            flags=re.MULTILINE,
+        )
+        self.assertTrue(changelog_versions)
+        self.assertEqual(manifest["version"], changelog_versions[0])
+
         license_text = (PACKAGE / "LICENSE").read_text(encoding="utf-8")
         self.assertGreater(len(license_text), 30_000)
         self.assertIn("GNU GENERAL PUBLIC LICENSE", license_text)
-        self.assertIn(
-            "Copyright (C) 2025 Mesh Annotation Layers Team", license_text
-        )
-        self.assertIn("at your option) any later version", license_text)
         self.assertEqual(
             license_text,
             (ROOT / "LICENSE").read_text(encoding="utf-8"),
         )
-
-    def test_extension_entry_point_reloads_every_submodule(self):
-        entry_tree = parse(PACKAGE / "__init__.py")
-        module_names = next(
-            (
-                tuple(
-                    item.value
-                    for item in node.value.elts
-                    if isinstance(item, ast.Constant)
-                )
-                for node in entry_tree.body
-                if isinstance(node, ast.Assign)
-                and any(
-                    isinstance(target, ast.Name)
-                    and target.id == "_SUBMODULE_NAMES"
-                    for target in node.targets
-                )
-                and isinstance(node.value, ast.Tuple)
-            ),
-            (),
-        )
-        expected = {
-            path.stem
-            for path in PACKAGE.glob("*.py")
-            if path.name != "__init__.py"
-        }
-        self.assertEqual(expected, set(module_names))
-        entry_source = (PACKAGE / "__init__.py").read_text(encoding="utf-8")
-        self.assertIn("importlib.reload(module)", entry_source)
-        self.assertIn('_needs_reload = "bpy" in locals()', entry_source)
-        self.assertNotIn("bl_info", entry_source)
-        self.assertNotIn('if __name__ == "__main__"', entry_source)
-
-    def test_overlay_color_does_not_depend_on_selection(self):
-        source = (PACKAGE / "overlay.py").read_text(encoding="utf-8")
-        self.assertNotIn('blend_set("ADDITIVE")', source)
-        self.assertNotIn('entry.get("selected")', source)
-
-    def test_viewport_draw_path_does_not_commit_annotation_json(self):
-        source = (PACKAGE / "overlay.py").read_text(encoding="utf-8")
-        self.assertNotIn("save_element_layers", source)
-        self.assertIn("synchronize_edit_mesh_annotations", source)
-
-    def test_undo_and_redo_have_explicit_cache_boundaries(self):
-        source = (PACKAGE / "overlay.py").read_text(encoding="utf-8")
-        for handler_name in ("undo_pre", "undo_post", "redo_pre", "redo_post"):
-            self.assertIn(f"bpy.app.handlers.{handler_name}", source)
-
-    def test_primary_remove_selected_action_preserves_other_layers(self):
-        operator_source = (PACKAGE / "operators.py").read_text(encoding="utf-8")
-        panel_source = (PACKAGE / "ui.py").read_text(encoding="utf-8")
-        self.assertIn('default="ACTIVE"', operator_source)
-        self.assertIn('clear_op.mode = "ACTIVE"', panel_source)
-
-    def test_context_menu_is_mode_aware_and_flat(self):
-        ui_source = (PACKAGE / "ui.py").read_text(encoding="utf-8")
-        preferences_source = (PACKAGE / "preferences.py").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn("infer_element_type_from_mode(context)", ui_source)
-        self.assertIn("draw_active_assignment(layout", ui_source)
-        self.assertIn("draw_clear_assignment(layout", ui_source)
-        self.assertNotIn("VIEW3D_MT_mesh_annotation_add", ui_source)
-        self.assertNotIn("VIEW3D_MT_mesh_annotation_remove", ui_source)
-        self.assertNotIn("MeshAnnotationTypeMenuBase", ui_source)
-        self.assertNotIn("context_menu_split_types", preferences_source)
-
-    def test_context_target_assignment_can_activate_the_layer(self):
-        operator_source = (PACKAGE / "operators.py").read_text(encoding="utf-8")
-        ui_source = (PACKAGE / "ui.py").read_text(encoding="utf-8")
-        self.assertIn("make_active: bpy.props.BoolProperty", operator_source)
-        self.assertIn("operator.make_active = True", ui_source)
 
     def test_every_annotation_write_uses_the_central_guard(self):
         write_operators = {
@@ -278,9 +228,8 @@ class SourceContractsTest(unittest.TestCase):
             "MESH_OT_annotation_mark_seam_all",
             "MESH_OT_annotation_clear_selected",
         }
-        tree = parse(PACKAGE / "operators.py")
         guarded = set()
-        for node in tree.body:
+        for node in parse(PACKAGE / "operators.py").body:
             if not isinstance(node, ast.ClassDef):
                 continue
             execute = next(
@@ -298,40 +247,6 @@ class SourceContractsTest(unittest.TestCase):
             ):
                 guarded.add(node.name)
         self.assertEqual(write_operators, guarded)
-
-    def test_obsolete_implementations_and_packagers_are_gone(self):
-        self.assertFalse((ROOT / "package.py").exists())
-        self.assertFalse((ROOT / "package_beta.py").exists())
-        sources = "\n".join(
-            path.read_text(encoding="utf-8") for path in PACKAGE.glob("*.py")
-        )
-        for obsolete in (
-            "_nearest_vertex_sources",
-            "compute_edge_loop",
-            "_walk_edge_loop_direction",
-            "mark_overlay_cache_dirty",
-            "_paint_cache_can_ignore_data_updates",
-            "skip_dialog",
-            "color_seed_face",
-            "color_seed_edge",
-            "color_seed_vertex",
-            "integer_layer",
-            "stack_rebuild_required",
-            "save_element_layers",
-            "_registration_cleanup_pending",
-            "_registration_is_complete",
-            "_BMESH_SYNC_SIGNATURES",
-            "_BMESH_SYNC_QUARANTINED",
-            "_callback_instance_count",
-            "rollback_errors",
-        ):
-            self.assertNotIn(obsolete, sources)
-
-    def test_load_and_history_handlers_are_explicit_lifecycle_boundaries(self):
-        source = (PACKAGE / "overlay.py").read_text(encoding="utf-8")
-        self.assertIn("bpy.app.handlers.load_pre", source)
-        self.assertIn("annotation_load_pre", source)
-        self.assertIn("invalidate_overlay_state()", source)
 
 
 if __name__ == "__main__":

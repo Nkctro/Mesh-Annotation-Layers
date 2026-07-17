@@ -163,7 +163,7 @@ class MESH_OT_annotation_make_single_user(
                 "VERIFIED",
                 tr("Verified Only"),
                 tr(
-                    "Keep assignments only when their current topology identity is proven"
+                    "Keep assignments only when the stored mapping and current Mesh agree"
                 ),
             ),
             (

@@ -39,7 +39,7 @@ operator or panel.
   JSON, BMesh, layer collections, or caches are mutated.
 - Shared Mesh data is never reconciled into an Object's JSON and is never
   modified by annotation operators.
-- A missing stack is initialized from durable JSON, never treated as proof that
+- A missing stack is initialized from durable JSON, never treated as evidence that
   JSON should be erased.
 - Undo/Redo, file loading, registration, and teardown are explicit cache
   boundaries.

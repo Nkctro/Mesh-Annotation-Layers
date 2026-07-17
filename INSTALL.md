@@ -4,7 +4,7 @@
 
 ## Install a release
 
-Mesh Annotation Layers 1.3 requires Blender 4.2 or newer.
+Mesh Annotation Layers requires Blender 4.2 or newer.
 
 1. Open **Edit > Preferences > Get Extensions**.
 2. Open the repository menu and choose **Install from Disk...**.
@@ -59,11 +59,12 @@ repository root:
 
 Validate the generated archive as well:
 
-    blender --command extension validate dist/mesh_annotation_layers-1.3.0.zip
+    blender --command extension validate dist/mesh_annotation_layers-<version>.zip
 
-Exact archive naming follows the Blender version used to build it. The project
-does not maintain a second packaging implementation; the official Blender
-command is the release authority.
+By default Blender names the archive from the manifest fields:
+`<id>-<version>.zip`. Replace `<version>` above with the manifest version. The
+project does not maintain a second packaging implementation; the official
+Blender command is the release authority.
 
 ## Automated checks
 

@@ -179,12 +179,27 @@ def tag_view3d_redraw(
     context=None,
     invalidate_cache=True,
     invalidate_geometry=False,
+    cache_owner=None,
 ):
     context = context or bpy.context
     if invalidate_cache:
-        context_object = getattr(context, "object", None) if context else None
+        try:
+            cache_object = (
+                cache_owner
+                if cache_owner is not None and cache_owner.type == "MESH"
+                else None
+            )
+        except (AttributeError, ReferenceError):
+            cache_object = None
+        if cache_object is None:
+            context_object = getattr(context, "object", None) if context else None
+            cache_object = (
+                context_object
+                if context_object is not None and context_object.type == "MESH"
+                else None
+            )
         invalidate_overlay_cache(
-            context_object if context_object and context_object.type == "MESH" else None,
+            cache_object,
             invalidate_geometry=invalidate_geometry,
         )
     wm = context.window_manager if context else None
@@ -199,12 +214,13 @@ def tag_view3d_redraw(
                 area.tag_redraw()
 
 
-def tag_surface_offset_redraw(context=None):
+def tag_surface_offset_redraw(context=None, cache_owner=None):
     """Update shader uniforms, rebuilding only when the GPU fallback is active."""
     tag_view3d_redraw(
         context,
         invalidate_cache=_surface_shader is None,
         invalidate_geometry=False,
+        cache_owner=cache_owner,
     )
 
 
@@ -271,6 +287,9 @@ def _modifier_state_signature(obj: bpy.types.Object):
 def _dependency_keys(obj: bpy.types.Object):
     """Collect Blender IDs whose updates may change this object's evaluated surface."""
     keys = {_id_key(obj), _id_key(obj.data)}
+    shape_keys = getattr(obj.data, "shape_keys", None)
+    if shape_keys is not None:
+        keys.add(_id_key(shape_keys))
     for modifier in obj.modifiers:
         for prop in modifier.bl_rna.properties:
             if prop.identifier == "rna_type" or prop.type != "POINTER":
@@ -307,17 +326,14 @@ def _linear_metric_signature(matrix):
 
 def _paint_mode_is_geometry_neutral(obj: bpy.types.Object) -> bool:
     if obj.mode == "WEIGHT_PAINT":
-        paint_is_geometry_neutral = not _weight_paint_can_deform_overlay(obj)
-    elif obj.mode == "VERTEX_PAINT":
-        paint_is_geometry_neutral = not any(
+        return not _weight_paint_can_deform_overlay(obj)
+    if obj.mode == "VERTEX_PAINT":
+        return not any(
             modifier.show_viewport and modifier.type == "NODES"
             for modifier in obj.modifiers
         )
-    elif obj.mode == "TEXTURE_PAINT":
-        paint_is_geometry_neutral = True
-    else:
-        return False
-    return paint_is_geometry_neutral
+    # Texture Paint images may drive Displace or another evaluated dependency.
+    return False
 
 
 @persistent
@@ -390,20 +406,32 @@ def annotation_depsgraph_update_post(_scene, depsgraph):
         if local_transform_only and not cached["has_world_space_batches"]:
             continue
         cached["dirty"] = True
+    for cache_key, cached in tuple(_overlay_geometry_cache.items()):
+        matched_updates = [
+            update
+            for update in relevant_updates
+            if update[0] in cached["dependency_keys"]
+        ]
+        if not matched_updates:
+            continue
+        local_transform_only = all(
+            update_key == cache_key and is_transform and not is_geometry
+            for update_key, is_geometry, is_transform in matched_updates
+        )
         if not local_transform_only:
             _overlay_geometry_cache.pop(cache_key, None)
-    if active_obj and active_obj.type == "MESH":
-        active_key = _id_key(active_obj)
-        if any(
-            update_key in {active_key, _id_key(active_obj.data)}
-            and is_geometry
-            for update_key, is_geometry, _is_transform in relevant_updates
-        ):
-            _overlay_geometry_cache.pop(active_key, None)
 
 
 def _weight_paint_can_deform_overlay(obj: bpy.types.Object) -> bool:
-    weight_driven_types = {"ARMATURE", "HOOK", "LATTICE", "MESH_DEFORM", "SURFACE_DEFORM"}
+    if getattr(obj.data, "shape_keys", None) is not None:
+        return True
+    weight_driven_types = {
+        "ARMATURE",
+        "HOOK",
+        "LATTICE",
+        "MESH_DEFORM",
+        "SURFACE_DEFORM",
+    }
     for modifier in obj.modifiers:
         if not modifier.show_viewport:
             continue
@@ -468,6 +496,7 @@ def _local_overlay_geometry(obj, bm, settings, source_filters):
         "signature": signature,
         "geometry": geometry,
         "vector_weight": vector_weight,
+        "dependency_keys": _dependency_keys(obj),
     }
     _overlay_geometry_cache.move_to_end(cache_key)
     while (

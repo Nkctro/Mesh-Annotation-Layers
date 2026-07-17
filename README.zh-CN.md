@@ -1,4 +1,4 @@
-# Mesh Annotation Layers 1.3 简体中文用户指南
+# Mesh Annotation Layers 简体中文用户指南
 
 [English README](README.md) · [安装与开发（英文）](INSTALL.md) ·
 [快速参考（英文）](QUICK_REFERENCE.md) · [常见问题（英文）](FAQ.md)
@@ -9,7 +9,6 @@ Mesh Annotation Layers 是一个 Blender 网格标注扩展。它可以把面、
 
 ## 适用范围
 
-- 正式版本：1.3.0
 - 清单最低版本：Blender 4.2
 - 当前实机验证：Blender 5.1.2
 - 无第三方 Python 依赖
@@ -20,7 +19,7 @@ Mesh Annotation Layers 是一个 Blender 网格标注扩展。它可以把面、
 
 ## 安装与启用
 
-1. 获取由 Blender 官方扩展命令构建的 `mesh_annotation_layers-1.3.0.zip`。
+1. 获取由 Blender 官方扩展命令构建的 `mesh_annotation_layers-<版本>.zip`。
 2. 打开 **编辑 > 偏好设置 > 获取扩展**。
 3. 打开仓库菜单，选择 **从磁盘安装...**。
 4. 选择 ZIP；如未自动启用，再启用 **Mesh Annotation Layers**。
@@ -95,7 +94,7 @@ Mesh Annotation Layers 是一个 Blender 网格标注扩展。它可以把面、
 
 使用 **将网格转为单用户**。扩展会先验证 Object 的 JSON、当前拓扑和 Mesh 自定义数据：
 
-- **仅在验证通过时保留**：只有证明完全一致才自动分离；
+- **仅在验证通过时保留**：只有 JSON、当前拓扑和自定义数据一致才自动分离；
 - **保留物体分配**：明确按当前元素索引保留 Object 的分配；
 - **丢弃分配**：保留图层定义，但清除无法验证的元素分配。
 
@@ -109,7 +108,7 @@ Mesh Annotation Layers 是一个 Blender 网格标注扩展。它可以把面、
 - Blender 的 BMesh 字符串值上限为 255 字节。扩展会在修改数据前预检，容量不足时整次
   操作取消，不留下半写入状态。
 - 新建 BMesh 栈只初始化已有分配；强制重建时才完整清除未分配元素。
-- 普通状态指纹只处理已标注元素；共享 Mesh 的可信边界会额外只读核对完整栈。
+- 普通兼容性标记只处理已标注元素；共享 Mesh 的可信边界会额外只读核对完整栈。
 - 显式选择、拾取和写入会立即协调 BMesh，避免同数量拓扑替换导致标签串位。
 - JSON、求值几何和 GPU 批次使用有界缓存；无关场景更新和单纯样式变化不会重建全部几何。
 - 视口绘制只读；拓扑协调由独立定时器完成，并在交互停止后安排最终刷新。
@@ -127,9 +126,9 @@ Mesh Annotation Layers 是一个 Blender 网格标注扩展。它可以把面、
 | 修改源码后界面仍是旧版本 | 使用 **F3 > Reload Scripts** |
 | ZIP 无法安装 | 确认使用 Blender 官方构建产物，而不是源码归档 |
 
-Undo/Redo 会清除派生缓存并从 Blender 历史状态恢复所有权。若某个特殊 modifier 栈生成
-了不寻常拓扑，请在目标 Blender 版本上验证；Subdivision Surface 和 Mirror 有专用映射
-路径，其他情况使用通用回退映射。
+Undo/Redo 会清除派生缓存并从 Blender 历史状态恢复所有权。保持元素索引的 modifier
+和受支持的 Subdivision Surface 栈使用求值几何；Mirror 与未知拓扑生成器回退到编辑笼，
+不会猜测元素归属。
 
 ## 语言设置
 
@@ -158,7 +157,7 @@ blender --command extension validate mesh_annotation_layers
 
 ```text
 blender --command extension build --source-dir mesh_annotation_layers --output-dir dist
-blender --command extension validate dist/mesh_annotation_layers-1.3.0.zip
+blender --command extension validate dist/mesh_annotation_layers-<version>.zip
 ```
 
 项目不维护第二套打包器。开发者还应阅读 [ARCHITECTURE.md](ARCHITECTURE.md)、

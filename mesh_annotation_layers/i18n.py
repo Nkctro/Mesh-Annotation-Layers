@@ -131,8 +131,8 @@ ZH_CN = {
     ),
     "Recovery": "恢复方式",
     "Verified Only": "仅在验证通过时保留",
-    "Keep assignments only when their current topology identity is proven": (
-        "仅当当前拓扑身份可以验证时保留分配"
+    "Keep assignments only when the stored mapping and current Mesh agree": (
+        "仅在已存映射与当前网格一致时保留分配"
     ),
     "Keep Object Assignments": "保留物体分配",
     "Explicitly trust the Object's current element indices": (

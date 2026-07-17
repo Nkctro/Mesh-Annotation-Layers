@@ -2,7 +2,38 @@
 
 All notable changes to the Mesh Annotation Layers addon will be documented in this file.
 
-# [Unreleased]
+# [1.3.1] - 2026-07-17
+
+### Changed
+
+- Replaced implementation-shape source tests with a smaller set of behavioral
+  contracts and isolated mutable Blender smoke-test fixtures.
+- Removed duplicated release-version text and the obsolete template labeler
+  workflow, which was the repository's only automated GitHub job.
+- Renamed the shared-state fingerprint as a compatibility token so its guarantee
+  is not confused with historical mesh-element identity.
+
+### Fixed
+
+- Avoid direct evaluated-index mapping for unknown or topology-generating
+  modifier stacks merely because their element counts match the source mesh.
+- Invalidate retained evaluated geometry through its own dependency closure even
+  after the corresponding GPU batch entry has been discarded.
+- Invalidate Texture Paint geometry conservatively when painted images may
+  drive modifiers, while retaining cage geometry for unsupported node stacks.
+- Fall back to the edit cage for Mirror until evaluated faces have reliable
+  source provenance instead of assigning them by nearest-face distance.
+- Tessellate concave evaluated polygons in scale-normalized coordinates without
+  drawing triangles outside the source face, including micro-scale meshes.
+- Route filtered Subdivision vertices through topology mapping so later
+  deformers and loose geometry do not lose or misplace annotations.
+- Treat a zero-level Subdivision Surface modifier as index-preserving so later
+  deformers still draw on evaluated coordinates.
+- Track Shape Key dependencies and invalidate Weight Paint geometry when key
+  values change.
+- Invalidate Solo Active GPU batches when the active layer index changes.
+- Invalidate the property owner's GPU batch rather than the currently active
+  Object when a non-active object's layer or display setting changes.
 
 # [1.3.0] - 2026-07-16
 
@@ -50,7 +81,7 @@ All notable changes to the Mesh Annotation Layers addon will be documented in th
 - Changed defaults to disable through-mesh display, use 7 px edges and 10 px points, and offset faces, edges, and points by 0.0001.
 - Keep cached annotation geometry during vertex/texture paint strokes when paint data cannot drive deformation.
 - Reuse sparse JSON layer assignments during coordinate-only edits instead of rescanning every mesh element and custom-data stack.
-- Keep the persisted proof sparse after normal writes, while validating every
+- Keep the persisted compatibility token sparse after normal writes, while validating every
   non-empty custom-data payload before shared Object data is trusted.
 - Refresh evaluated overlays adaptively during mesh and sculpt interaction, prioritizing input responsiveness and scheduling a final redraw automatically.
 - Split the former single-file implementation into focused constants, localization,
@@ -66,7 +97,7 @@ All notable changes to the Mesh Annotation Layers addon will be documented in th
   unsigned-varint stack that fails before Blender's 255-byte string limit can
   truncate data; legacy values remain readable.
 - Made shared Mesh annotations explicitly read-only and added a single-user
-  recovery action. Shared mappings now require a topology/custom-data proof;
+  recovery action. Shared mappings now require a topology/custom-data agreement check;
   stale mappings are quarantined and recovery requires an explicit keep/discard
   choice instead of silently trusting element indices.
 - Made discard recovery operate per element type, so a stale face mapping does
@@ -88,7 +119,7 @@ All notable changes to the Mesh Annotation Layers addon will be documented in th
 
 ### Fixed
 - Preflight the complete final mapping before any BMesh/RNA mutation and roll
-  back payloads, JSON, caches, proof state, collection cursors, active indices,
+  back payloads, JSON, caches, compatibility state, collection cursors, active indices,
   and ID hints when a commit fails. Any Mesh state that cannot be confirmed as
   restored is quarantined instead of treated as synchronized.
 - Merge topology ownership into private snapshots so an incomplete/unsavable

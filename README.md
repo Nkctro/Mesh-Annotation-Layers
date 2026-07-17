@@ -1,4 +1,4 @@
-# Mesh Annotation Layers 1.3
+# Mesh Annotation Layers
 
 [English](#english) | [简体中文](README.zh-CN.md)
 
@@ -48,14 +48,14 @@ objects from overwriting one another, annotation editing is read-only whenever
 the Mesh has multiple users.
 
 Use **Make Mesh Single User** in the panel or context menu. The extension copies
-the Mesh only after the Object mapping is proven to match the current topology
-and custom-data stack. If Blender topology edits made that proof impossible,
+the Mesh only after the Object mapping agrees with the current topology and
+custom-data stack. If Blender topology edits made that agreement impossible,
 the recovery dialog requires an explicit choice to trust current indices or to
 discard stale assignments. Unverified assignments are not drawn or selected.
 
 ### Install
 
-1. Download the release ZIP built for version 1.3.0.
+1. Download the release ZIP built from the current extension manifest.
 2. In Blender, open **Edit > Preferences > Get Extensions**.
 3. Open the repository menu, choose **Install from Disk...**, and select the ZIP.
 4. Enable **Mesh Annotation Layers** if Blender does not enable it automatically.

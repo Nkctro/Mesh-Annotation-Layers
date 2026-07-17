@@ -6,6 +6,18 @@ from .constants import EDGE, FACE, VERTEX
 from .overlay import tag_surface_offset_redraw, tag_view3d_redraw
 
 
+def _tag_owner_batch_redraw(self, context):
+    tag_view3d_redraw(
+        context,
+        invalidate_geometry=False,
+        cache_owner=self.id_data,
+    )
+
+
+def _tag_owner_surface_offset_redraw(self, context):
+    tag_surface_offset_redraw(context, cache_owner=self.id_data)
+
+
 class MeshAnnotationLayer(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty(name="Name", default="Layer")
     color: bpy.props.FloatVectorProperty(
@@ -31,9 +43,7 @@ class MeshAnnotationLayer(bpy.types.PropertyGroup):
     is_visible: bpy.props.BoolProperty(
         name="Visible",
         default=True,
-        update=lambda self, context: tag_view3d_redraw(
-            context, invalidate_geometry=False
-        ),
+        update=_tag_owner_batch_redraw,
     )
 
 
@@ -46,9 +56,7 @@ class MeshAnnotationSettings(bpy.types.PropertyGroup):
     solo_active: bpy.props.BoolProperty(
         name="Solo Active Layer",
         default=False,
-        update=lambda self, context: tag_view3d_redraw(
-            context, invalidate_geometry=False
-        ),
+        update=_tag_owner_batch_redraw,
     )
     debug_output: bpy.props.BoolProperty(name="Debug Output", default=False)
     ui_element_type: bpy.props.EnumProperty(
@@ -92,9 +100,7 @@ class MeshAnnotationSettings(bpy.types.PropertyGroup):
         default=0.0,
         step=0.01,
         precision=3,
-        update=lambda self, context: tag_view3d_redraw(
-            context, invalidate_geometry=False
-        ),
+        update=_tag_owner_batch_redraw,
     )
     overlay_face_offset: bpy.props.FloatProperty(
         name="Face Offset",
@@ -104,7 +110,7 @@ class MeshAnnotationSettings(bpy.types.PropertyGroup):
         default=0.0001,
         step=0.0001,
         precision=4,
-        update=lambda self, context: tag_surface_offset_redraw(context),
+        update=_tag_owner_surface_offset_redraw,
     )
     overlay_edge_offset: bpy.props.FloatProperty(
         name="Edge Offset",
@@ -114,9 +120,7 @@ class MeshAnnotationSettings(bpy.types.PropertyGroup):
         default=0.0001,
         step=0.0001,
         precision=4,
-        update=lambda self, context: tag_view3d_redraw(
-            context, invalidate_geometry=False
-        ),
+        update=_tag_owner_batch_redraw,
     )
     overlay_vertex_offset: bpy.props.FloatProperty(
         name="Vertex Offset",
@@ -126,7 +130,7 @@ class MeshAnnotationSettings(bpy.types.PropertyGroup):
         default=0.0001,
         step=0.0001,
         precision=4,
-        update=lambda self, context: tag_surface_offset_redraw(context),
+        update=_tag_owner_surface_offset_redraw,
     )
 
     overlay_alpha_multiplier: bpy.props.FloatProperty(
@@ -148,9 +152,18 @@ class MeshAnnotationSettings(bpy.types.PropertyGroup):
     edge_layers: bpy.props.CollectionProperty(type=MeshAnnotationLayer)
     vertex_layers: bpy.props.CollectionProperty(type=MeshAnnotationLayer)
 
-    active_face_layer_index: bpy.props.IntProperty(default=-1)
-    active_edge_layer_index: bpy.props.IntProperty(default=-1)
-    active_vertex_layer_index: bpy.props.IntProperty(default=-1)
+    active_face_layer_index: bpy.props.IntProperty(
+        default=-1,
+        update=_tag_owner_batch_redraw,
+    )
+    active_edge_layer_index: bpy.props.IntProperty(
+        default=-1,
+        update=_tag_owner_batch_redraw,
+    )
+    active_vertex_layer_index: bpy.props.IntProperty(
+        default=-1,
+        update=_tag_owner_batch_redraw,
+    )
 
     next_face_layer_id: bpy.props.IntProperty(default=1)
     next_edge_layer_id: bpy.props.IntProperty(default=1)
@@ -160,7 +173,7 @@ class MeshAnnotationSettings(bpy.types.PropertyGroup):
     edge_layers_data: bpy.props.StringProperty(default="{}")
     vertex_layers_data: bpy.props.StringProperty(default="{}")
 
-    # A digest of the last proven JSON/BMesh/topology state.  It prevents an
+    # A token for the last agreeing JSON/BMesh/topology state. It prevents an
     # Object-local index mapping from being trusted after its Mesh is shared
     # and changed by Blender's native topology tools.
     face_annotation_state: bpy.props.StringProperty(default="", options={'HIDDEN'})

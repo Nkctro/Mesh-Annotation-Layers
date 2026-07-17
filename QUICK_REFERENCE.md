@@ -56,8 +56,8 @@ Only choosing another existing target opens a second submenu.
 
 A locked warning means more than one Object uses the active Mesh. Annotation
 writes are blocked. Overlay, Select Layer, and Pick Layer consume assignments
-only after the Object mapping is proven to match the current Mesh state. If
-native topology editing invalidated that proof, those assignments are
+only after the Object mapping agrees with the current Mesh state. If native
+topology editing invalidated that agreement, those assignments are
 quarantined. **Make Mesh Single User** then asks whether to trust current indices
 explicitly or discard stale assignments; automatic recovery never guesses.
 

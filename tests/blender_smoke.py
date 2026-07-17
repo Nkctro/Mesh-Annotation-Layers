@@ -110,35 +110,24 @@ def test_extension_namespace_package_name():
 
 
 def test_entry_point_reloads_all_submodules():
+    def owned_symbols(module):
+        return {
+            name: value
+            for name, value in vars(module).items()
+            if callable(value) and getattr(value, "__module__", None) == module.__name__
+        }
+
     symbols = {
-        "constants": addon.constants.element_spec,
-        "i18n": addon.i18n.tr,
-        "model": addon.model.create_layer,
-        "evaluated_geometry": addon.evaluated_geometry.evaluated_overlay_geometry,
-        "loops": addon.loops.collect_edge_loop_edges,
-        "overlay": addon.overlay.register,
-        "properties": addon.properties.MeshAnnotationSettings,
-        "operators": addon.operators.MESH_OT_annotation_assign_active,
-        "preferences": addon.preferences.MeshAnnotationPreferences,
-        "ui": addon.ui.VIEW3D_MT_mesh_annotation_context,
+        name: owned_symbols(getattr(addon, name))
+        for name in addon._SUBMODULE_NAMES
     }
+    assert all(symbols.values())
     importlib.reload(addon)
-    reloaded_symbols = {
-        "constants": addon.constants.element_spec,
-        "i18n": addon.i18n.tr,
-        "model": addon.model.create_layer,
-        "evaluated_geometry": addon.evaluated_geometry.evaluated_overlay_geometry,
-        "loops": addon.loops.collect_edge_loop_edges,
-        "overlay": addon.overlay.register,
-        "properties": addon.properties.MeshAnnotationSettings,
-        "operators": addon.operators.MESH_OT_annotation_assign_active,
-        "preferences": addon.preferences.MeshAnnotationPreferences,
-        "ui": addon.ui.VIEW3D_MT_mesh_annotation_context,
-    }
-    assert all(
-        symbols[name] is not reloaded_symbols[name]
-        for name in symbols
-    )
+    for module_name, previous in symbols.items():
+        current = owned_symbols(getattr(addon, module_name))
+        common_names = previous.keys() & current.keys()
+        assert common_names
+        assert all(previous[name] is not current[name] for name in common_names)
 
 
 def create_grid_object():
@@ -197,6 +186,15 @@ def create_disconnected_triangle_object(name="DisconnectedTriangles"):
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     return obj
+
+
+def remove_object_and_orphaned_mesh(obj):
+    mesh = obj.data
+    object_name = obj.name
+    if bpy.data.objects.get(object_name) is obj:
+        bpy.data.objects.remove(obj, do_unlink=True)
+    if mesh.users == 0 and bpy.data.meshes.get(mesh.name) is mesh:
+        bpy.data.meshes.remove(mesh)
 
 
 def rotate_two_triangle_diagonal(obj):
@@ -762,12 +760,12 @@ def test_retention_users_do_not_masquerade_as_real_mesh_users():
                 bpy.data.meshes.remove(mesh)
 
 
-def test_shared_proof_rejects_untracked_inherited_stack_payloads():
-    base = create_disconnected_triangle_object("CompleteStackProofBase")
+def test_shared_compatibility_rejects_untracked_inherited_stack_payloads():
+    base = create_disconnected_triangle_object("CompleteStackCompatibilityBase")
     layer = model.create_layer(base.mesh_annotations, FACE)
     assert model.assign_elements_to_layer(base, FACE, layer.layer_id, [0])
     original_token = base.mesh_annotations.face_annotation_state
-    linked = bpy.data.objects.new("CompleteStackProofLinked", base.data)
+    linked = bpy.data.objects.new("CompleteStackCompatibilityLinked", base.data)
     bpy.context.collection.objects.link(linked)
 
     bpy.ops.object.mode_set(mode="EDIT")
@@ -815,7 +813,7 @@ def test_shared_proof_rejects_untracked_inherited_stack_payloads():
         bpy.data.objects.remove(base, do_unlink=True)
 
 
-def test_shared_proof_rejects_invalid_or_lossy_json():
+def test_shared_compatibility_rejects_invalid_or_lossy_json():
     base = create_two_triangle_object("InvalidSharedJsonBase")
     linked = bpy.data.objects.new("InvalidSharedJsonLinked", base.data)
     bpy.context.collection.objects.link(linked)
@@ -912,11 +910,10 @@ def test_new_layer_cancellation_restores_all_cursors():
         bpy.data.objects.remove(obj, do_unlink=True)
 
 
-def test_assignments_and_evaluated_geometry():
+def create_annotated_grid_object():
     obj = create_grid_object()
     settings = obj.mesh_annotations
     source_filters = {FACE: {10}, EDGE: {20}, VERTEX: {30}}
-
     for element_type, source_indices in source_filters.items():
         layer = model.create_layer(settings, element_type)
         assigned = model.assign_elements_to_layer(
@@ -926,6 +923,13 @@ def test_assignments_and_evaluated_geometry():
         mapping = model.load_element_layers(settings, element_type)
         source_index = next(iter(source_indices))
         assert mapping[str(source_index)] == [layer.layer_id]
+    return obj
+
+
+def test_assignments_and_evaluated_geometry():
+    obj = create_annotated_grid_object()
+    settings = obj.mesh_annotations
+    source_filters = {FACE: {10}, EDGE: {20}, VERTEX: {30}}
 
     original_face_data = settings.face_layers_data
     settings.face_layers_data = '{"bad": ["x"], "0": [1, "bad"], "-1": [2]}'
@@ -1094,19 +1098,15 @@ def test_layer_counts_parse_once(obj):
         model.invalidate_element_layers_cache()
 
 
-def test_face_only_generic_mapping_is_demand_driven():
+def test_face_only_subdivision_mapping_is_demand_driven():
     obj = create_grid_object()
     obj.name = "DemandDrivenMapping"
-    obj.modifiers.new("Triangulate", "TRIANGULATE")
+    obj.modifiers.new("Subdivision", "SUBSURF").levels = 1
     bpy.context.view_layer.objects.active = obj
     source_mesh = bmesh.new()
     source_mesh.from_mesh(obj.data)
-    original_edges = evaluated_geometry._nearest_edge_sources
     original_vertices = evaluated_geometry._topology_vertex_sources
     try:
-        evaluated_geometry._nearest_edge_sources = lambda *_args, **_kwargs: (
-            (_ for _ in ()).throw(AssertionError("face-only mapping computed edges"))
-        )
         evaluated_geometry._topology_vertex_sources = lambda *_args, **_kwargs: (
             (_ for _ in ()).throw(AssertionError("face-only mapping computed vertices"))
         )
@@ -1120,10 +1120,192 @@ def test_face_only_generic_mapping_is_demand_driven():
         assert not geometry[EDGE]
         assert not geometry[VERTEX]
     finally:
-        evaluated_geometry._nearest_edge_sources = original_edges
         evaluated_geometry._topology_vertex_sources = original_vertices
         source_mesh.free()
-        bpy.data.objects.remove(obj, do_unlink=True)
+        remove_object_and_orphaned_mesh(obj)
+
+
+def test_unknown_modifier_falls_back_to_cage_mapping():
+    obj = create_grid_object()
+    obj.name = "SameCountModifierMapping"
+    obj.modifiers.new("UnknownProvenance", "NODES")
+    bpy.context.view_layer.objects.active = obj
+    source_mesh = bmesh.new()
+    source_mesh.from_mesh(obj.data)
+    original_cage = evaluated_geometry._cage_overlay_geometry
+    calls = []
+    try:
+
+        def observed_cage(*args, **kwargs):
+            calls.append(True)
+            return original_cage(*args, **kwargs)
+
+        evaluated_geometry._cage_overlay_geometry = observed_cage
+        geometry = evaluated_geometry.evaluated_overlay_geometry(
+            obj,
+            source_mesh,
+            obj.mesh_annotations,
+            {FACE: {10}, EDGE: set(), VERTEX: set()},
+        )
+        assert geometry[FACE]
+        assert calls
+    finally:
+        evaluated_geometry._cage_overlay_geometry = original_cage
+        source_mesh.free()
+        remove_object_and_orphaned_mesh(obj)
+
+
+def test_mirror_falls_back_to_cage_mapping():
+    obj = create_disconnected_triangle_object("MirrorCageFallback")
+    obj.modifiers.new("Mirror", "MIRROR")
+    source_mesh = bmesh.new()
+    source_mesh.from_mesh(obj.data)
+    original_cage = evaluated_geometry._cage_overlay_geometry
+    calls = []
+    try:
+
+        def observed_cage(*args, **kwargs):
+            calls.append(True)
+            return original_cage(*args, **kwargs)
+
+        evaluated_geometry._cage_overlay_geometry = observed_cage
+        geometry = evaluated_geometry.evaluated_overlay_geometry(
+            obj,
+            source_mesh,
+            obj.mesh_annotations,
+            {FACE: {1}, EDGE: set(), VERTEX: set()},
+        )
+        assert calls
+        assert [record[0] for record in geometry[FACE]] == [1]
+    finally:
+        evaluated_geometry._cage_overlay_geometry = original_cage
+        source_mesh.free()
+        remove_object_and_orphaned_mesh(obj)
+
+
+def test_concave_ngon_uses_valid_tessellation():
+    coordinates = (
+        (0.0, 0.0, 0.0),
+        (3.0, 0.0, 0.0),
+        (3.0, 1.0, 0.0),
+        (1.0, 1.0, 0.0),
+        (1.0, 2.0, 0.0),
+        (3.0, 2.0, 0.0),
+        (3.0, 3.0, 0.0),
+        (0.0, 3.0, 0.0),
+    )
+    for scale in (1e-5, 1.0, 1e5):
+        mesh = bpy.data.meshes.new(f"ConcaveOverlayMesh{scale}")
+        mesh.from_pydata(
+            tuple(tuple(value * scale for value in point) for point in coordinates),
+            (),
+            ((0, 1, 2, 3, 4, 5, 6, 7),),
+        )
+        mesh.update()
+        try:
+            triangles = evaluated_geometry._polygon_triangles(
+                mesh, mesh.polygons[0]
+            )
+            triangle_area = sum(
+                (vertex1 - vertex0).cross(vertex2 - vertex0).length * 0.5
+                for vertex0, vertex1, vertex2 in triangles
+            )
+            expected_area = 7.0 * scale * scale
+            assert abs(triangle_area - expected_area) <= expected_area * 1e-5
+        finally:
+            bpy.data.meshes.remove(mesh)
+
+
+def test_subdivision_vertex_mapping_survives_later_deformer():
+    obj = create_two_triangle_object("DeformedSubdivisionVertex")
+    obj.modifiers.new("Subdivision", "SUBSURF").levels = 1
+    displace = obj.modifiers.new("LargeXDisplace", "DISPLACE")
+    displace.direction = "X"
+    displace.mid_level = 0.0
+    displace.strength = 100.0
+    source_mesh = bmesh.new()
+    source_mesh.from_mesh(obj.data)
+    try:
+        geometry = evaluated_geometry.evaluated_overlay_geometry(
+            obj,
+            source_mesh,
+            obj.mesh_annotations,
+            {FACE: set(), EDGE: set(), VERTEX: {1}},
+        )
+        evaluated_mesh = obj.evaluated_get(
+            bpy.context.evaluated_depsgraph_get()
+        ).data
+        assert len(geometry[VERTEX]) == 1
+        source_index, coordinate, _normal = geometry[VERTEX][0]
+        assert source_index == 1
+        assert (coordinate - evaluated_mesh.vertices[1].co).length < 1e-6
+    finally:
+        source_mesh.free()
+        remove_object_and_orphaned_mesh(obj)
+
+
+def test_subdivision_keeps_loose_vertex_annotations():
+    mesh = bpy.data.meshes.new("LooseSubdivisionVertexMesh")
+    mesh.from_pydata(
+        (
+            (0.0, 0.0, 0.0),
+            (2.0, 0.0, 0.0),
+            (2.0, 2.0, 0.0),
+            (0.0, 2.0, 0.0),
+            (10.0, 0.0, 0.0),
+        ),
+        (),
+        ((0, 1, 2, 3),),
+    )
+    mesh.update()
+    obj = bpy.data.objects.new("LooseSubdivisionVertex", mesh)
+    bpy.context.collection.objects.link(obj)
+    bpy.context.view_layer.objects.active = obj
+    obj.select_set(True)
+    obj.modifiers.new("Subdivision", "SUBSURF").levels = 1
+    source_mesh = bmesh.new()
+    source_mesh.from_mesh(obj.data)
+    try:
+        geometry = evaluated_geometry.evaluated_overlay_geometry(
+            obj,
+            source_mesh,
+            obj.mesh_annotations,
+            {FACE: set(), EDGE: set(), VERTEX: {4}},
+        )
+        assert len(geometry[VERTEX]) == 1
+        assert geometry[VERTEX][0][0] == 4
+    finally:
+        source_mesh.free()
+        remove_object_and_orphaned_mesh(obj)
+
+
+def test_zero_level_subdivision_preserves_later_deformation():
+    obj = create_two_triangle_object("ZeroLevelSubdivision")
+    obj.modifiers.new("ZeroSubdivision", "SUBSURF").levels = 0
+    displace = obj.modifiers.new("LaterDisplace", "DISPLACE")
+    displace.direction = "Z"
+    displace.mid_level = 0.0
+    displace.strength = 3.0
+    source_mesh = bmesh.new()
+    source_mesh.from_mesh(obj.data)
+    try:
+        geometry = evaluated_geometry.evaluated_overlay_geometry(
+            obj,
+            source_mesh,
+            obj.mesh_annotations,
+            {FACE: {0}, EDGE: set(), VERTEX: set()},
+        )
+        z_values = [
+            coordinate.z
+            for _source_index, triangles, _normal in geometry[FACE]
+            for triangle in triangles
+            for coordinate in triangle
+        ]
+        assert z_values
+        assert min(z_values) > 2.9
+    finally:
+        source_mesh.free()
+        remove_object_and_orphaned_mesh(obj)
 
 
 def test_depsgraph_invalidation_is_scoped(obj):
@@ -1156,6 +1338,229 @@ def test_depsgraph_invalidation_is_scoped(obj):
         assert cached["dirty"]
     finally:
         bpy.data.meshes.remove(unrelated_mesh)
+
+
+def test_geometry_only_cache_tracks_dependencies():
+    obj = create_grid_object()
+    obj.name = "GeometryOnlyCache"
+    other = create_grid_object()
+    other.name = "GeometryOnlyCacheActive"
+    settings = obj.mesh_annotations
+    layer = model.create_layer(settings, FACE)
+    assert model.assign_elements_to_layer(obj, FACE, layer.layer_id, [10])
+    bpy.context.view_layer.objects.active = obj
+    overlay.invalidate_overlay_state()
+    with overlay_gpu_stub():
+        overlay.cached_overlay_batches(obj, settings)
+    cache_key = obj.session_uid
+    assert cache_key in overlay._overlay_geometry_cache
+    overlay.invalidate_overlay_cache(obj, invalidate_geometry=False)
+    assert cache_key not in overlay._overlay_batch_cache
+    assert cache_key in overlay._overlay_geometry_cache
+
+    bpy.context.view_layer.objects.active = other
+    related_update = SimpleNamespace(
+        is_updated_geometry=True,
+        is_updated_transform=False,
+        id=obj.data,
+    )
+    overlay.annotation_depsgraph_update_post(
+        None, SimpleNamespace(updates=[related_update])
+    )
+    assert cache_key not in overlay._overlay_geometry_cache
+    bpy.data.objects.remove(obj, do_unlink=True)
+    bpy.data.objects.remove(other, do_unlink=True)
+
+
+def test_texture_paint_displace_invalidates_geometry_cache():
+    obj = create_grid_object()
+    obj.name = "TexturePaintDisplace"
+    settings = obj.mesh_annotations
+    layer = model.create_layer(settings, FACE)
+    assert model.assign_elements_to_layer(obj, FACE, layer.layer_id, [10])
+    image = bpy.data.images.new("TexturePaintDisplaceImage", width=2, height=2)
+    texture = bpy.data.textures.new("TexturePaintDisplaceTexture", type="IMAGE")
+    texture.image = image
+    displace = obj.modifiers.new("ImageDisplace", "DISPLACE")
+    displace.texture = texture
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode="TEXTURE_PAINT")
+    try:
+        assert not overlay._paint_mode_is_geometry_neutral(obj)
+        overlay.invalidate_overlay_state()
+        with overlay_gpu_stub():
+            overlay.cached_overlay_batches(obj, settings)
+        cache_key = obj.session_uid
+        assert cache_key in overlay._overlay_geometry_cache
+
+        overlay.annotation_depsgraph_update_post(
+            None,
+            SimpleNamespace(
+                updates=[
+                    SimpleNamespace(
+                        is_updated_geometry=True,
+                        is_updated_transform=False,
+                        id=obj,
+                    ),
+                    SimpleNamespace(
+                        is_updated_geometry=True,
+                        is_updated_transform=False,
+                        id=image,
+                    ),
+                ]
+            ),
+        )
+        assert cache_key not in overlay._overlay_geometry_cache
+        assert overlay._overlay_batch_cache[cache_key]["dirty"]
+    finally:
+        if obj.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+        overlay.invalidate_overlay_state()
+        remove_object_and_orphaned_mesh(obj)
+        bpy.data.textures.remove(texture)
+        bpy.data.images.remove(image)
+
+
+def test_weight_paint_nodes_preserves_cage_geometry():
+    obj = create_grid_object()
+    obj.name = "WeightPaintNodes"
+    obj.modifiers.new("WeightDrivenNodes", "NODES")
+    assert not evaluated_geometry._modifier_stack_supports_evaluated_mapping(obj)
+    assert not overlay._weight_paint_can_deform_overlay(obj)
+    remove_object_and_orphaned_mesh(obj)
+
+
+def test_weight_paint_shape_key_invalidates_geometry_cache():
+    obj = create_two_triangle_object("WeightPaintShapeKey")
+    obj.shape_key_add(name="Basis")
+    raised = obj.shape_key_add(name="Raised")
+    raised.data[2].co.z = 2.0
+    raised.value = 0.0
+    settings = obj.mesh_annotations
+    layer = model.create_layer(settings, FACE)
+    assert model.assign_elements_to_layer(obj, FACE, layer.layer_id, [0])
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode="WEIGHT_PAINT")
+    try:
+        assert overlay._weight_paint_can_deform_overlay(obj)
+        overlay.invalidate_overlay_state()
+        with overlay_gpu_stub():
+            overlay.cached_overlay_batches(obj, settings)
+        cache_key = obj.session_uid
+        assert cache_key in overlay._overlay_geometry_cache
+        cached_z = max(
+            coordinate.z
+            for _source_index, triangles, _normal in
+            overlay._overlay_geometry_cache[cache_key]["geometry"][FACE]
+            for triangle in triangles
+            for coordinate in triangle
+        )
+        assert abs(cached_z) < 1e-6
+        assert obj.data.shape_keys.session_uid in overlay._overlay_batch_cache[
+            cache_key
+        ]["dependency_keys"]
+
+        raised.value = 1.0
+        bpy.context.view_layer.update()
+        assert cache_key not in overlay._overlay_geometry_cache
+        source_mesh = bmesh.new()
+        source_mesh.from_mesh(obj.data)
+        try:
+            fresh_geometry = evaluated_geometry.evaluated_overlay_geometry(
+                obj,
+                source_mesh,
+                settings,
+                {FACE: {0}, EDGE: set(), VERTEX: set()},
+            )
+        finally:
+            source_mesh.free()
+        fresh_z = max(
+            coordinate.z
+            for _source_index, triangles, _normal in fresh_geometry[FACE]
+            for triangle in triangles
+            for coordinate in triangle
+        )
+        assert fresh_z > 1.9
+    finally:
+        if obj.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+        overlay.invalidate_overlay_state()
+        remove_object_and_orphaned_mesh(obj)
+
+
+def test_solo_active_layer_change_invalidates_batches():
+    obj = create_two_triangle_object("SoloActiveCache")
+    settings = obj.mesh_annotations
+    layer1 = model.create_layer(settings, FACE)
+    layer2 = model.create_layer(settings, FACE)
+    assert model.assign_elements_to_layer(obj, FACE, layer1.layer_id, [0])
+    assert model.assign_elements_to_layer(obj, FACE, layer2.layer_id, [1])
+    settings.solo_active = True
+    settings.active_face_layer_index = 0
+    overlay.invalidate_overlay_state()
+    try:
+        with overlay_gpu_stub():
+            first = overlay.cached_overlay_batches(obj, settings)
+        assert {entry["layer_id"] for entry in first[FACE]} == {layer1.layer_id}
+        cache_key = obj.session_uid
+        assert cache_key in overlay._overlay_batch_cache
+
+        settings.active_face_layer_index = 1
+        assert cache_key not in overlay._overlay_batch_cache
+        with overlay_gpu_stub():
+            second = overlay.cached_overlay_batches(obj, settings)
+        assert second is not first
+        assert {entry["layer_id"] for entry in second[FACE]} == {layer2.layer_id}
+    finally:
+        overlay.invalidate_overlay_state()
+        remove_object_and_orphaned_mesh(obj)
+
+
+def test_non_active_solo_change_invalidates_owner_batches():
+    obj_a = create_two_triangle_object("SoloCacheOwnerA")
+    obj_b = create_two_triangle_object("SoloCacheOwnerB")
+
+    def configure(obj):
+        settings = obj.mesh_annotations
+        layer1 = model.create_layer(settings, FACE)
+        layer2 = model.create_layer(settings, FACE)
+        assert model.assign_elements_to_layer(obj, FACE, layer1.layer_id, [0])
+        assert model.assign_elements_to_layer(obj, FACE, layer2.layer_id, [1])
+        settings.solo_active = True
+        settings.active_face_layer_index = 0
+        return settings, layer1, layer2
+
+    settings_a, layer_a1, layer_a2 = configure(obj_a)
+    settings_b, _layer_b1, _layer_b2 = configure(obj_b)
+    overlay.invalidate_overlay_state()
+    try:
+        bpy.context.view_layer.objects.active = obj_a
+        with overlay_gpu_stub():
+            first_a = overlay.cached_overlay_batches(obj_a, settings_a)
+        assert {entry["layer_id"] for entry in first_a[FACE]} == {
+            layer_a1.layer_id
+        }
+
+        bpy.context.view_layer.objects.active = obj_b
+        with overlay_gpu_stub():
+            overlay.cached_overlay_batches(obj_b, settings_b)
+        cache_key_a = obj_a.session_uid
+        cache_key_b = obj_b.session_uid
+        assert cache_key_a in overlay._overlay_batch_cache
+        assert cache_key_b in overlay._overlay_batch_cache
+
+        settings_a.active_face_layer_index = 1
+        assert cache_key_a not in overlay._overlay_batch_cache
+        assert cache_key_b in overlay._overlay_batch_cache
+        with overlay_gpu_stub():
+            second_a = overlay.cached_overlay_batches(obj_a, settings_a)
+        assert {entry["layer_id"] for entry in second_a[FACE]} == {
+            layer_a2.layer_id
+        }
+    finally:
+        overlay.invalidate_overlay_state()
+        remove_object_and_orphaned_mesh(obj_a)
+        remove_object_and_orphaned_mesh(obj_b)
 
 
 def test_local_surface_batches_survive_style_and_transform_updates():
@@ -1501,7 +1906,23 @@ def test_registered_reload_cycle():
     assert_runtime_callbacks_are_singletons()
 
 
+def run_with_fresh_annotations(test):
+    obj = create_annotated_grid_object()
+    subdivision = obj.modifiers.new("Subdivision", "SUBSURF")
+    subdivision.levels = 2
+    bpy.context.view_layer.objects.active = obj
+    try:
+        test(obj)
+    finally:
+        overlay.invalidate_overlay_state()
+        if obj.name in bpy.data.objects:
+            if obj.mode != "OBJECT":
+                bpy.ops.object.mode_set(mode="OBJECT")
+            remove_object_and_orphaned_mesh(obj)
+
+
 def main():
+    initial_meshes = set(bpy.data.meshes)
     test_extension_namespace_package_name()
     test_entry_point_reloads_all_submodules()
     addon.register()
@@ -1516,38 +1937,57 @@ def main():
         test_shared_topology_change_is_quarantined()
         test_discard_recovery_only_clears_unverified_element_types()
         test_retention_users_do_not_masquerade_as_real_mesh_users()
-        test_shared_proof_rejects_untracked_inherited_stack_payloads()
-        test_shared_proof_rejects_invalid_or_lossy_json()
+        test_shared_compatibility_rejects_untracked_inherited_stack_payloads()
+        test_shared_compatibility_rejects_invalid_or_lossy_json()
         test_immediate_equal_count_write_forces_reconciliation()
         test_new_layer_cancellation_restores_all_cursors()
         obj, geometry, elapsed_ms = test_assignments_and_evaluated_geometry()
-        test_multi_layer_assignment_and_active_removal(obj)
-        test_flat_context_menu_and_sidebar_draw(obj)
-        test_button_operators(obj)
-        test_cache_reuse(obj)
-        test_clean_cache_skips_modifier_signature(obj)
-        test_layer_counts_parse_once(obj)
-        test_face_only_generic_mapping_is_demand_driven()
-        test_depsgraph_invalidation_is_scoped(obj)
-        test_local_surface_batches_survive_style_and_transform_updates()
-        test_overlay_color_is_selection_independent(obj)
-        test_history_resyncs_bmesh_ownership(obj)
-        test_equal_count_topology_reconciles_after_quiet_period()
-        test_load_pre_clears_identity_keyed_state(obj)
-        test_registration_failure_rolls_back_completed_steps()
-        test_register_rejects_and_preserves_a_foreign_same_name_property()
-        test_external_draw_handle_removal_does_not_break_teardown()
-        test_registered_manual_reload_cycle()
-        test_registered_reload_cycle()
         counts = {kind: len(records) for kind, records in geometry.items()}
         base_counts = (
             len(obj.data.vertices),
             len(obj.data.edges),
             len(obj.data.polygons),
         )
+        remove_object_and_orphaned_mesh(obj)
+        for isolated_test in (
+            test_multi_layer_assignment_and_active_removal,
+            test_flat_context_menu_and_sidebar_draw,
+            test_button_operators,
+            test_cache_reuse,
+            test_clean_cache_skips_modifier_signature,
+            test_layer_counts_parse_once,
+            test_depsgraph_invalidation_is_scoped,
+            test_overlay_color_is_selection_independent,
+            test_history_resyncs_bmesh_ownership,
+            test_load_pre_clears_identity_keyed_state,
+        ):
+            run_with_fresh_annotations(isolated_test)
+        test_face_only_subdivision_mapping_is_demand_driven()
+        test_unknown_modifier_falls_back_to_cage_mapping()
+        test_mirror_falls_back_to_cage_mapping()
+        test_concave_ngon_uses_valid_tessellation()
+        test_subdivision_vertex_mapping_survives_later_deformer()
+        test_subdivision_keeps_loose_vertex_annotations()
+        test_zero_level_subdivision_preserves_later_deformation()
+        test_geometry_only_cache_tracks_dependencies()
+        test_texture_paint_displace_invalidates_geometry_cache()
+        test_weight_paint_nodes_preserves_cage_geometry()
+        test_weight_paint_shape_key_invalidates_geometry_cache()
+        test_solo_active_layer_change_invalidates_batches()
+        test_non_active_solo_change_invalidates_owner_batches()
+        test_local_surface_batches_survive_style_and_transform_updates()
+        test_equal_count_topology_reconciles_after_quiet_period()
+        test_registration_failure_rolls_back_completed_steps()
+        test_register_rejects_and_preserves_a_foreign_same_name_property()
+        test_external_draw_handle_removal_does_not_break_teardown()
+        test_registered_manual_reload_cycle()
+        test_registered_reload_cycle()
         print("BLENDER_SMOKE_OK", base_counts, round(elapsed_ms, 2), counts)
     finally:
         addon.unregister()
+        for mesh in tuple(bpy.data.meshes):
+            if mesh not in initial_meshes and mesh.users == 0:
+                bpy.data.meshes.remove(mesh)
 
 
 if __name__ == "__main__":

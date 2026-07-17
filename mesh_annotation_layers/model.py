@@ -660,7 +660,7 @@ def _mapped_topology_identity(bm, element_type: str, elem):
     return _canonical_face_vertices(elem)
 
 
-def annotation_state_fingerprint(
+def annotation_compatibility_token(
     bm, element_type: str, mapping, data_str: str | None = None
 ) -> str:
     """Bind sparse Object assignments to their current local Mesh identities."""
@@ -713,13 +713,13 @@ def _complete_stack_matches_mapping(bm, element_type: str, mapping) -> bool:
     return bool(complete and not changed)
 
 
-def record_annotation_state(
+def record_annotation_compatibility(
     settings, element_type: str, bm, mapping, data_str: str | None = None
 ):
-    """Persist proof that JSON, topology, and BMesh ownership agree."""
+    """Persist a token showing that the current representations agree."""
 
     property_name = element_spec(element_type).state_property
-    value = annotation_state_fingerprint(
+    value = annotation_compatibility_token(
         bm, element_type, mapping, data_str=data_str
     )
     if getattr(settings, property_name, "") != value:
@@ -738,7 +738,7 @@ def _finish_stack_inspection(
     if not merge_result.inspected:
         return
     if merge_result.complete:
-        record_annotation_state(settings, element_type, bm, mapping, data_str)
+        record_annotation_compatibility(settings, element_type, bm, mapping, data_str)
         mark_bmesh_mapping_synchronized(mesh, bm, element_type)
     else:
         clear_annotation_state(settings, element_type)
@@ -766,7 +766,7 @@ def shared_annotation_mapping_is_current(
     try:
         if not _complete_stack_matches_mapping(bm, element_type, mapping):
             return False
-        current = annotation_state_fingerprint(bm, element_type, mapping)
+        current = annotation_compatibility_token(bm, element_type, mapping)
     except (StackEncodingError, TypeError, ValueError):
         return False
     stored = getattr(settings, element_spec(element_type).state_property, "")
@@ -801,7 +801,7 @@ def shared_annotation_mapping_statuses(obj: bpy.types.Object) -> dict[str, bool]
 
 
 def shared_annotation_mappings_are_current(obj: bpy.types.Object) -> bool:
-    """Return whether every Object mapping is proven by one Mesh snapshot."""
+    """Return whether every Object mapping agrees with one Mesh snapshot."""
 
     return all(shared_annotation_mapping_statuses(obj).values())
 
@@ -955,7 +955,7 @@ def commit_mapping_transaction(
     source_is_edit: bool,
     complete_state: bool,
 ):
-    """Commit BMesh + JSON + proof token, restoring all of them on failure."""
+    """Commit BMesh, JSON, and compatibility token with rollback on failure."""
 
     container = element_container(bm, element_type)
     if element_indices is None:
@@ -989,7 +989,7 @@ def commit_mapping_transaction(
             _flush_bmesh(mesh, bm, True)
         commit_prepared_element_layers(settings, element_type, mapping, data_str)
         if complete_state:
-            record_annotation_state(
+            record_annotation_compatibility(
                 settings, element_type, bm, mapping, data_str
             )
         else:
@@ -1097,7 +1097,7 @@ def rebuild_annotation_stacks(obj: bpy.types.Object, mappings=None):
         for element_type, mapping in prepared_mappings.items():
             ensure_lookup_tables(bm, element_type)
             ensure_annotation_stack(bm, element_type, mapping, rebuild=True)
-            state_tokens[element_type] = annotation_state_fingerprint(
+            state_tokens[element_type] = annotation_compatibility_token(
                 bm, element_type, mapping, data_strings[element_type]
             )
         _flush_bmesh(mesh, bm, source_is_edit)
@@ -1336,7 +1336,7 @@ def count_elements_for_layer(obj: bpy.types.Object, element_type: str, layer_id:
 
 
 def reconciled_mapping_for_explicit_read(obj, element_type: str, bm):
-    """Return a proven snapshot; explicit actions may durably reconcile JSON."""
+    """Return an agreed snapshot; explicit actions may durably reconcile JSON."""
 
     mesh = obj.data
     settings = obj.mesh_annotations
