@@ -1,7 +1,14 @@
 import ast
+import importlib.util
+import shutil
+import subprocess
+import sys
+import tempfile
 import tomllib
 import unittest
+import zipfile
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -117,6 +124,60 @@ class SourceContractsTest(unittest.TestCase):
         }
         self.assertEqual(expected_docs, english_docs)
         self.assertEqual(english_docs, chinese_docs)
+
+    def test_manifest_only_development_builds_restore_source_files(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_root = Path(temporary_directory)
+            temporary_tools = temporary_root / "tools"
+            temporary_package = temporary_root / "mesh_annotation_layers"
+            temporary_tools.mkdir()
+            temporary_package.mkdir()
+            shutil.copy2(ROOT / "tools" / "build.py", temporary_tools / "build.py")
+            shutil.copy2(ROOT / "blender_manifest.toml", temporary_root)
+            shutil.copy2(PACKAGE / "__init__.py", temporary_package)
+
+            manifest_path = temporary_root / "blender_manifest.toml"
+            init_path = temporary_package / "__init__.py"
+            original_manifest = manifest_path.read_bytes()
+            original_init = init_path.read_bytes()
+
+            for arguments in (("--dev",), ("--suffix", "review-fix")):
+                archives_before = set((temporary_root / "dist").glob("*.zip"))
+                result = subprocess.run(
+                    [sys.executable, str(temporary_tools / "build.py"), *arguments],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual(original_manifest, manifest_path.read_bytes())
+                self.assertEqual(original_init, init_path.read_bytes())
+
+                archives_after = set((temporary_root / "dist").glob("*.zip"))
+                new_archives = archives_after - archives_before
+                self.assertEqual(1, len(new_archives))
+                with zipfile.ZipFile(new_archives.pop()) as archive:
+                    packaged_manifest = tomllib.loads(
+                        archive.read(
+                            "mesh_annotation_layers/blender_manifest.toml"
+                        ).decode("utf-8")
+                    )
+                self.assertTrue(packaged_manifest["version"].startswith("1.3.0-"))
+
+            spec = importlib.util.spec_from_file_location(
+                "temporary_build", temporary_tools / "build.py"
+            )
+            build_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(build_module)
+            with mock.patch.object(
+                build_module.zipfile,
+                "ZipFile",
+                side_effect=RuntimeError("forced archive failure"),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "forced archive failure"):
+                    build_module.create_addon_zip(dev_build_timestamp=True)
+            self.assertEqual(original_manifest, manifest_path.read_bytes())
+            self.assertEqual(original_init, init_path.read_bytes())
 
     def test_every_module_parses_and_has_unique_top_level_definitions(self):
         for path in PACKAGE.glob("*.py"):
