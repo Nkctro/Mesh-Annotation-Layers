@@ -1,213 +1,36 @@
-# Testing Checklist for Mesh Annotation Layers
+# Release test checklist / 发布测试清单
 
-This checklist should be used for manual testing in Blender once the addon is installed.
+Use Blender 4.2 or newer. / 使用 Blender 4.2 或更高版本。
 
-## Pre-Installation Tests
+## Automated / 自动检查
 
-- [x] Python syntax validation passed
-- [x] CodeQL security scan passed (0 vulnerabilities)
-- [x] Code review completed
-- [x] Packaging script tested
-- [x] ZIP package created successfully
+- [ ] `python -m compileall -q mesh_annotation_layers tests tools`
+- [ ] `python tests/test_source_contracts.py`
+- [ ] `blender --factory-startup --background --python tests/blender_smoke.py --python-exit-code 1`
+- [ ] `python tools/build.py`
+- [ ] Install the generated ZIP with **Install from Disk** / 使用**从磁盘安装**验证生成的 ZIP
 
-## Installation Tests
+## Core workflow / 核心流程
 
-### Method 1: Install from ZIP
-- [ ] Open Blender 3.x or 4.x
-- [ ] Edit → Preferences → Add-ons
-- [ ] Click "Install..."
-- [ ] Select the ZIP file
-- [ ] Addon appears in list
-- [ ] Enable checkbox
-- [ ] No errors in console
+- [ ] Register and unregister without console errors / 启用与禁用无控制台错误
+- [ ] Create, rename, reorder, show, solo, and delete layers / 新建、重命名、排序、显示、独显、删除图层
+- [ ] Assign selected faces, edges, and vertices / 分配选中的面、边、点
+- [ ] Assign derived loops/paths and vertex valence / 分配推导循环、路径和指定连接数顶点
+- [ ] Select layer elements, pick from selection, and clear assignments / 选择整层、从选区激活、清理分配
+- [ ] Mark active and all face-layer boundaries as UV seams / 将活动及全部面图层边界标记为 UV 缝
 
-### Method 2: Install from Folder
-- [ ] Copy mesh_annotation_layers folder to addons directory
-- [ ] Restart Blender
-- [ ] Addon appears in preferences
-- [ ] Enable checkbox
-- [ ] No errors in console
+## Display and persistence / 显示与持久化
 
-## Basic Functionality Tests
+- [ ] Colors, opacity, offsets, edge trim, point size, and through-mesh display work / 显示参数生效
+- [ ] Overlays remain correct in documented object/sculpt/paint modes / 非编辑模式显示符合文档
+- [ ] Subdivision Surface and Mirror test scenes follow the evaluated surface / 细分与镜像场景跟随评估表面
+- [ ] Two objects keep independent layers / 多对象图层互不干扰
+- [ ] Save, reopen, undo, and redo preserve valid data / 保存、重开、撤销、重做后数据正确
 
-### Layer Creation
-- [ ] Create a cube (Shift+A → Mesh → Cube)
-- [ ] Enter Edit Mode (Tab)
-- [ ] Open sidebar (N key)
-- [ ] "Annotation" tab appears
-- [ ] Click "+" to add layer
-- [ ] Layer appears in list with random color
-- [ ] Layer name is editable
+## Record / 记录
 
-### Face Annotation
-- [ ] Select some faces
-- [ ] Click "Faces" button
-- [ ] Selected faces show colored overlay
-- [ ] Overlay color matches layer color
-
-### Edge Annotation
-- [ ] Create new layer
-- [ ] Switch to edge select mode (2)
-- [ ] Select some edges
-- [ ] Click "Edges" button
-- [ ] Selected edges show colored overlay (thicker lines)
-
-### Vertex Annotation
-- [ ] Create new layer
-- [ ] Switch to vertex select mode (1)
-- [ ] Select some vertices
-- [ ] Click "Vertices" button
-- [ ] Selected vertices show colored overlay (points)
-
-### Layer Management
-- [ ] Rename a layer by clicking its name
-- [ ] Change layer color by clicking color swatch
-- [ ] Color picker works
-- [ ] Toggle layer visibility (eye icon)
-- [ ] Hidden layer doesn't show overlay
-- [ ] Delete a layer (select and click "-")
-- [ ] Layer and its data are removed
-
-### Selection Operations
-- [ ] Create layer with some faces
-- [ ] Deselect all (Alt+A)
-- [ ] Click "Select Layer Elements"
-- [ ] Previously assigned faces are selected
-
-### Remove Operations
-- [ ] Assign faces to a layer
-- [ ] Select some of those faces
-- [ ] Click "Remove Selected" for faces
-- [ ] Those faces no longer show overlay
-- [ ] Other faces still show overlay
-
-### Clear Operation
-- [ ] Assign elements to a layer
-- [ ] Click "Clear Layer"
-- [ ] All overlays for that layer disappear
-- [ ] Layer still exists but empty
-
-### Opacity Control
-- [ ] Adjust "Opacity" slider
-- [ ] All overlays become more/less transparent
-- [ ] Works with all element types
-
-### Multiple Layers
-- [ ] Create 5+ layers
-- [ ] Assign different faces to different layers
-- [ ] All layers show correctly with different colors
-- [ ] Toggle visibility of individual layers
-- [ ] Remove specific layers
-- [ ] Remaining layers still work
-
-## Advanced Tests
-
-### Multiple Objects
-- [ ] Create two separate mesh objects
-- [ ] Each has its own independent layers
-- [ ] Switching objects shows correct layers
-- [ ] Layers don't interfere between objects
-
-### Large Mesh Performance
-- [ ] Create a subdivided plane (10k+ faces)
-- [ ] Create annotation layers
-- [ ] Assign large selections to layers
-- [ ] Check viewport performance
-- [ ] Overlays render smoothly
-
-### Mode Switching
-- [ ] Create layers in Edit Mode
-- [ ] Switch to Object Mode
-- [ ] Overlays disappear (expected)
-- [ ] Switch back to Edit Mode
-- [ ] Overlays reappear correctly
-
-### Undo/Redo
-- [ ] Create layer (Ctrl+Z to undo)
-- [ ] Layer disappears
-- [ ] Ctrl+Shift+Z to redo
-- [ ] Layer reappears
-- [ ] Test undo/redo for all operations
-
-### File Save/Load
-- [ ] Create layers with annotations
-- [ ] Save .blend file
-- [ ] Close Blender
-- [ ] Open the .blend file
-- [ ] All layers and annotations preserved
-- [ ] Everything works as before
-
-### Edge Cases
-- [ ] Create layer with no elements
-- [ ] Layer works, just shows nothing
-- [ ] Try to remove layer when none selected
-- [ ] Operation disabled or handled gracefully
-- [ ] Rapidly toggle visibility
-- [ ] No crashes or errors
-- [ ] Create 20+ layers
-- [ ] Performance acceptable
-
-## UI/UX Tests
-
-### Visual Clarity
-- [ ] Colors are clearly visible
-- [ ] Overlays don't obscure mesh too much
-- [ ] Opacity adjustment helps visibility
-- [ ] Eye icons are intuitive
-- [ ] Layer names are readable
-
-### Workflow Smoothness
-- [ ] Common operations are quick
-- [ ] No unnecessary clicks
-- [ ] Keyboard-free workflow possible
-- [ ] Intuitive for first-time users
-
-### Error Handling
-- [ ] Delete mesh with annotations
-- [ ] No errors or crashes
-- [ ] Switch to non-mesh object
-- [ ] Panel disappears or disables appropriately
-- [ ] Try operations in Object Mode
-- [ ] Operations disabled appropriately
-
-## Documentation Tests
-
-- [ ] README.md is clear and helpful
-- [ ] Installation instructions work
-- [ ] Examples are practical
-- [ ] FAQ answers common questions
-- [ ] Quick reference is useful
-
-## Final Checks
-
-- [ ] No console errors during any operation
-- [ ] No crashes
-- [ ] All features work as documented
-- [ ] Performance is acceptable
-- [ ] Ready for production use
-
-## Issues Found
-
-List any issues found during testing:
-
-1. 
-2. 
-3. 
-
-## Test Environment
-
-- Blender Version: _______________
-- Operating System: _______________
-- Graphics Card: _______________
-- Date Tested: _______________
-- Tester Name: _______________
-
-## Overall Assessment
-
-- [ ] Ready for release
-- [ ] Needs minor fixes
-- [ ] Needs major fixes
-
-## Notes
-
-(Add any additional notes here)
+- Blender version / Blender 版本:
+- Operating system / 操作系统:
+- GPU:
+- Archive SHA-256:
+- Notes / 备注:

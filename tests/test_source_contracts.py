@@ -29,6 +29,36 @@ def translation_catalog():
 
 
 class SourceContractsTest(unittest.TestCase):
+    def test_repository_layout_and_bilingual_docs_stay_paired(self):
+        self.assertTrue((ROOT / "tools" / "build.py").is_file())
+        self.assertFalse((ROOT / "package.py").exists())
+        self.assertFalse((ROOT / "package_beta.py").exists())
+
+        legacy_root_docs = {
+            "ARCHITECTURE.md",
+            "CONTRIBUTING.md",
+            "EXAMPLES.md",
+            "FAQ.md",
+            "INSTALL.md",
+            "QUICK_REFERENCE.md",
+        }
+        self.assertFalse(
+            legacy_root_docs & {path.name for path in ROOT.glob("*.md")}
+        )
+
+        expected_docs = {
+            "installation.md",
+            "user-guide.md",
+            "faq.md",
+            "development.md",
+        }
+        english_docs = {path.name for path in (ROOT / "docs" / "en").glob("*.md")}
+        chinese_docs = {
+            path.name for path in (ROOT / "docs" / "zh-CN").glob("*.md")
+        }
+        self.assertEqual(expected_docs, english_docs)
+        self.assertEqual(english_docs, chinese_docs)
+
     def test_every_module_parses_and_has_unique_top_level_definitions(self):
         for path in PACKAGE.glob("*.py"):
             definitions = {}

@@ -1,10 +1,13 @@
-# Changelog
+# Changelog / 更新日志
 
-All notable changes to the Mesh Annotation Layers addon will be documented in this file.
+All notable changes are recorded here. User documentation is maintained in paired English
+and Simplified Chinese files. / 所有重要变更记录于此；用户文档以英文和简体中文成对维护。
 
 # [Unreleased]
 
 ### Added
+- Added paired English and Simplified Chinese installation, user, FAQ, and development docs.
+- Added repository-structure contracts for bilingual docs and build tooling.
 - Keep annotations visible in Object, Weight Paint, Vertex Paint, Sculpt, and Texture Paint modes; assignment tools remain safely limited to Edit Mode.
 - Added face/edge/vertex workspace tabs that synchronize Blender's mesh selection mode when editing.
 - Added a one-click action to enter Edit Mode from read-only annotation views.
@@ -13,6 +16,8 @@ All notable changes to the Mesh Annotation Layers addon will be documented in th
   icon-only layer controls and viewport overlay toggles.
 
 ### Changed
+- Consolidated duplicated root documentation under `docs/en/` and `docs/zh-CN/`.
+- Moved the archive builder to `tools/build.py` and folded beta packaging into `--dev`.
 - Reorganized the sidebar around one active element type and moved display tuning into a collapsed child panel.
 - Batched all visible edges in a layer into one GPU draw call and preserved the overlay cache during weight strokes that cannot deform the evaluated mesh.
 - Removed per-row full-mesh layer counting from the layer list.
