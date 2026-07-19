@@ -1,30 +1,73 @@
-"""Mesh Annotation Layers add-on entry point."""
+"""Mesh Annotation Layers extension entry point."""
+_needs_reload = "bpy" in locals()
+_restore_registration = bool(
+    _needs_reload and globals().get("_runtime_registered", False)
+)
+if _restore_registration:
+    unregister()
 
-bl_info = {
-    "name": "Mesh Annotation Layers",
-    "author": "Nkctro",
-    "version": (1, 2, 0),
-    "blender": (4, 2, 0),
-    "location": "3D Viewport > Sidebar > Mesh Annotation",
-    "description": "Annotate mesh elements with evaluated-surface color layers",
-    "category": "3D View",
-    "doc_url": "https://github.com/Nkctro/Mesh-Annotation-Layers",
-    "tracker_url": "https://github.com/Nkctro/Mesh-Annotation-Layers/issues",
-}
+import importlib
+import sys
 
 import bpy
 
-from . import operators, overlay, preferences, properties, ui
-from .properties import MeshAnnotationSettings
+_SUBMODULE_NAMES = (
+    "constants",
+    "i18n",
+    "model",
+    "evaluated_geometry",
+    "loops",
+    "overlay",
+    "properties",
+    "operators",
+    "preferences",
+    "ui",
+)
 
 
+def _load_submodules():
+    """Import once, then reload only after the prior runtime is unregistered."""
+    loaded = {}
+    for name in _SUBMODULE_NAMES:
+        qualified_name = f"{__package__}.{name}"
+        module = sys.modules.get(qualified_name)
+        if module is None:
+            module = importlib.import_module(f".{name}", __package__)
+        elif _needs_reload:
+            module = importlib.reload(module)
+        loaded[name] = module
+    return loaded
+
+
+_submodules = _load_submodules()
+globals().update(_submodules)
+
+MeshAnnotationSettings = properties.MeshAnnotationSettings
 CLASSES = preferences.CLASSES + properties.CLASSES + operators.CLASSES + ui.CLASSES
 _registered_classes = []
+_runtime_registered = False
+_property_registered = False
+
+
+def _annotation_property_is_ours():
+    if not hasattr(bpy.types.Object, "mesh_annotations"):
+        return False
+    try:
+        prop = bpy.types.Object.bl_rna.properties["mesh_annotations"]
+        return bool(
+            prop.type == "POINTER"
+            and prop.fixed_type == MeshAnnotationSettings.bl_rna
+        )
+    except (AttributeError, KeyError, ReferenceError, RuntimeError):
+        return False
 
 
 def register():
-    if _registered_classes:
+    global _property_registered, _runtime_registered
+    if _runtime_registered:
         return
+    if hasattr(bpy.types.Object, "mesh_annotations"):
+        raise RuntimeError("Object.mesh_annotations is already registered")
     try:
         for cls in CLASSES:
             bpy.utils.register_class(cls)
@@ -32,25 +75,28 @@ def register():
         bpy.types.Object.mesh_annotations = bpy.props.PointerProperty(
             type=MeshAnnotationSettings
         )
+        _property_registered = True
         overlay.register()
         ui.register()
     except Exception:
         unregister()
         raise
+    _runtime_registered = True
 
 
 def unregister():
+    global _property_registered, _runtime_registered
+    _runtime_registered = False
     ui.unregister()
     overlay.unregister()
-    if hasattr(bpy.types.Object, "mesh_annotations"):
-        del bpy.types.Object.mesh_annotations
-    while _registered_classes:
-        cls = _registered_classes.pop()
-        try:
-            bpy.utils.unregister_class(cls)
-        except RuntimeError:
-            pass
+    if _property_registered:
+        if _annotation_property_is_ours():
+            del bpy.types.Object.mesh_annotations
+        _property_registered = False
+    for cls in reversed(tuple(_registered_classes)):
+        bpy.utils.unregister_class(cls)
+    _registered_classes.clear()
 
 
-if __name__ == "__main__":
+if _restore_registration:
     register()

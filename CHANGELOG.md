@@ -8,6 +8,14 @@ and Simplified Chinese files. / 所有重要变更记录于此；用户文档以
 ### Added
 - Added paired English and Simplified Chinese installation, user, FAQ, and development docs.
 - Added repository-structure contracts for bilingual docs and build tooling.
+
+### Changed
+- Consolidated duplicated root documentation under `docs/en/` and `docs/zh-CN/`.
+- Moved the archive builder to `tools/build.py` and folded beta packaging into `--dev`.
+
+# [1.3.0] - 2026-07-16
+
+### Added
 - Keep annotations visible in Object, Weight Paint, Vertex Paint, Sculpt, and Texture Paint modes; assignment tools remain safely limited to Edit Mode.
 - Added face/edge/vertex workspace tabs that synchronize Blender's mesh selection mode when editing.
 - Added a one-click action to enter Edit Mode from read-only annotation views.
@@ -16,8 +24,6 @@ and Simplified Chinese files. / 所有重要变更记录于此；用户文档以
   icon-only layer controls and viewport overlay toggles.
 
 ### Changed
-- Consolidated duplicated root documentation under `docs/en/` and `docs/zh-CN/`.
-- Moved the archive builder to `tools/build.py` and folded beta packaging into `--dev`.
 - Reorganized the sidebar around one active element type and moved display tuning into a collapsed child panel.
 - Batched all visible edges in a layer into one GPU draw call and preserved the overlay cache during weight strokes that cannot deform the evaluated mesh.
 - Removed per-row full-mesh layer counting from the layer list.
