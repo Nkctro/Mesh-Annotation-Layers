@@ -1,45 +1,35 @@
-## Description
-<!-- Provide a brief description of the changes in this pull request -->
+## Summary / 摘要
 
-## Type of Change
-<!-- Mark the relevant option with an "x" -->
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] Documentation update
-- [ ] Code refactoring
-- [ ] Performance improvement
-- [ ] Other (please describe):
+<!-- What changes for users, and why? / 用户会看到什么变化，为什么？ -->
 
-## Related Issue
-<!-- Link to the issue this PR addresses, if applicable -->
-Fixes #(issue number)
+## Scope / 范围
 
-## Changes Made
-<!-- List the specific changes made in this PR -->
-- 
-- 
-- 
+- [ ] Bug fix / 缺陷修复
+- [ ] Feature / 新功能
+- [ ] Performance / 性能
+- [ ] Refactor / 重构
+- [ ] Documentation / 文档
+- [ ] Breaking change / 破坏性变更
 
-## Testing
-<!-- Describe the tests you ran to verify your changes -->
-- [ ] Tested in Blender Edit Mode
-- [ ] Tested with different mesh types (faces, edges, vertices)
-- [ ] Tested layer creation and deletion
-- [ ] Tested selection and annotation features
-- [ ] Tested with different Blender versions
+Related issue / 关联问题: #
 
-## Screenshots (if applicable)
-<!-- Add screenshots to demonstrate the changes, especially for UI changes -->
+## Verification / 验证
 
-## Checklist
-- [ ] My code follows the code style of this project
-- [ ] I have performed a self-review of my own code
-- [ ] I have commented my code, particularly in hard-to-understand areas
-- [ ] I have made corresponding changes to the documentation
-- [ ] My changes generate no new warnings
-- [ ] I have tested my changes in Blender
-- [ ] Any dependent changes have been merged and published
+<!-- List exact commands and Blender scenarios. / 列出准确命令与 Blender 场景。 -->
 
-## Additional Notes
-<!-- Add any additional notes or context about the PR here -->
+- [ ] Source contracts pass / 源码契约通过
+- [ ] Blender smoke test passes / Blender 冒烟测试通过
+- [ ] Installable ZIP verified / 可安装 ZIP 已验证
+- [ ] Face, edge, and vertex workflows checked when relevant / 已检查相关面、边、点流程
+
+## Risk and screenshots / 风险与截图
+
+<!-- Note compatibility/performance risk. Add UI screenshots when relevant. -->
+<!-- 说明兼容性或性能风险；涉及 UI 时附截图。 -->
+
+## Checklist / 检查
+
+- [ ] Changes are scoped and self-reviewed / 改动聚焦且已自审
+- [ ] Behavior changes include regression coverage / 行为变化包含回归测试
+- [ ] `docs/en/` and `docs/zh-CN/` stay aligned / 中英文文档保持一致
+- [ ] Changelog updated when user-visible / 用户可见变化已更新日志

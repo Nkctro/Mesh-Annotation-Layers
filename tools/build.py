@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""
-Package Mesh Annotation Layers addon for distribution
-Creates a ZIP file suitable for Blender addon installation
-"""
+"""Build installable Mesh Annotation Layers archives."""
 
 import argparse
 import datetime
@@ -13,10 +10,12 @@ from pathlib import Path
 import tomllib
 
 
+ROOT = Path(__file__).resolve().parents[1]
+
+
 def get_addon_version():
     """Extract version from blender_manifest.toml"""
-    script_dir = Path(__file__).parent
-    manifest_file = script_dir / "blender_manifest.toml"
+    manifest_file = ROOT / "blender_manifest.toml"
 
     try:
         with open(manifest_file, "rb") as f:
@@ -32,7 +31,7 @@ def get_addon_version():
 
 def normalize_version_base(version_str: str) -> str:
     """Strip pre-release/build suffixes (e.g. 1.2.3-alpha+1 -> 1.2.3)."""
-    return re.split(r"[-+]", version_str, 1)[0]
+    return re.split(r"[-+]", version_str, maxsplit=1)[0]
 
 
 def next_beta_build_number(state_path: Path, base_version: str) -> int:
@@ -114,7 +113,7 @@ def parse_version_parts(version_str: str):
 
 def create_addon_zip(dev_suffix: str = None, dev_build_timestamp: bool = False):
     """Create a ZIP package of the addon"""
-    script_dir = Path(__file__).parent
+    script_dir = ROOT
     addon_dir = script_dir / "mesh_annotation_layers"
     output_dir = script_dir / "dist"
     manifest_path = script_dir / "blender_manifest.toml"
@@ -137,8 +136,8 @@ def create_addon_zip(dev_suffix: str = None, dev_build_timestamp: bool = False):
     build_state_path = script_dir / ".beta_build_counter"
     build_number = None
 
-    original_manifest = None
-    original_init = None
+    original_manifest_bytes = None
+    original_init_bytes = None
 
     if dev_build_timestamp:
         major, minor, patch = parse_version_parts(base_version)
@@ -153,16 +152,20 @@ def create_addon_zip(dev_suffix: str = None, dev_build_timestamp: bool = False):
             package_label = f"{package_label}-{dev_suffix}"
         bl_info_version = (major, minor, patch, build_number)
         build_label = f"Beta build #{build_number} {now.strftime('%Y-%m-%d %H:%M:%S')}"
-        original_manifest = update_manifest_version(manifest_path, manifest_version)
-        original_init = update_bl_info_version(init_path, bl_info_version, build_label=build_label)
+        original_manifest_bytes = manifest_path.read_bytes()
+        original_init_bytes = init_path.read_bytes()
+        update_manifest_version(manifest_path, manifest_version)
+        update_bl_info_version(init_path, bl_info_version, build_label=build_label)
     elif dev_suffix:
         manifest_version = f"{base_version}-{dev_suffix}"
         display_version = manifest_version
         package_label = display_version
         major, minor, patch = parse_version_parts(base_version)
         bl_info_version = (major, minor, patch)
-        original_manifest = update_manifest_version(manifest_path, manifest_version)
-        original_init = update_bl_info_version(init_path, bl_info_version)
+        original_manifest_bytes = manifest_path.read_bytes()
+        original_init_bytes = init_path.read_bytes()
+        update_manifest_version(manifest_path, manifest_version)
+        update_bl_info_version(init_path, bl_info_version)
 
     if dev_build_timestamp:
         zip_filename = f"mesh_annotation_layers_v{package_label}.zip"
@@ -177,16 +180,23 @@ def create_addon_zip(dev_suffix: str = None, dev_build_timestamp: bool = False):
     print()
 
     addon_files = sorted(addon_dir.glob("*.py"))
-    root_files = ["blender_manifest.toml", "LICENSE", "README.md"]
+    root_files = [
+        "blender_manifest.toml",
+        "LICENSE",
+        "README.md",
+        "README.zh-CN.md",
+    ]
     doc_files = [
-        "INSTALL.md",
         "CHANGELOG.md",
-        "QUICK_REFERENCE.md",
-        "EXAMPLES.md",
-        "FAQ.md",
-        "CONTRIBUTING.md",
-        "ARCHITECTURE.md",
         "SECURITY.md",
+        "docs/en/installation.md",
+        "docs/en/user-guide.md",
+        "docs/en/faq.md",
+        "docs/en/development.md",
+        "docs/zh-CN/installation.md",
+        "docs/zh-CN/user-guide.md",
+        "docs/zh-CN/faq.md",
+        "docs/zh-CN/development.md",
     ]
 
     try:
@@ -218,10 +228,10 @@ def create_addon_zip(dev_suffix: str = None, dev_build_timestamp: bool = False):
                     zipf.write(file_path, arcname)
                     print(f"  Added: {arcname}")
     finally:
-        if original_manifest is not None:
-            manifest_path.write_text(original_manifest, encoding="utf-8")
-        if original_init is not None:
-            init_path.write_text(original_init, encoding="utf-8")
+        if original_manifest_bytes is not None:
+            manifest_path.write_bytes(original_manifest_bytes)
+        if original_init_bytes is not None:
+            init_path.write_bytes(original_init_bytes)
 
     if dev_build_timestamp and build_number is not None:
         build_state_path.write_text(f"{base_version} {build_number}", encoding="utf-8")
@@ -233,16 +243,16 @@ def create_addon_zip(dev_suffix: str = None, dev_build_timestamp: bool = False):
     print(f"  Size: {size_kb:.2f} KB")
     print("\nTo install in Blender:")
     print("  1. Open Blender")
-    print("  2. Go to Edit > Preferences > Add-ons")
-    print("  3. Click 'Install...'")
+    print("  2. Go to Edit > Preferences > Get Extensions")
+    print("  3. Open the menu and choose 'Install from Disk'")
     print(f"  4. Select: {zip_path}")
-    print("  5. Enable the checkbox next to 'Mesh: Mesh Annotation Layers'")
+    print("  5. Enable Mesh Annotation Layers if necessary")
 
     return zip_path
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Package Mesh Annotation Layers addon.")
+    parser = argparse.ArgumentParser(description="Build Mesh Annotation Layers.")
     parser.add_argument(
         "--dev",
         action="store_true",

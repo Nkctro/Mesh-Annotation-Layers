@@ -1,32 +1,24 @@
-# Security Policy
+# Security policy / 安全策略
 
-## Supported Versions
+## English
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 1.1.1   | :white_check_mark: |
+Security fixes target the latest release. Older releases may be asked to upgrade before
+a report is investigated.
 
-## Reporting a Vulnerability
+Report vulnerabilities privately through a **GitHub Security Advisory** in this
+repository. Include the affected version, reproduction steps, impact, and any suggested
+mitigation. Do not open a public issue before a fix is available.
 
-If you discover a security vulnerability in the Mesh Annotation Layers addon, please report it by:
+We aim to acknowledge a report within 48 hours, provide an initial assessment within one
+week, and coordinate disclosure after a fix is ready. Reporters are credited unless they
+request anonymity.
 
-1. **Creating a GitHub Security Advisory** (preferred): Go to the Security tab → Advisories → New Draft
-2. **Email**: Contact the repository maintainer directly through GitHub
+## 简体中文
 
-### What to Include
+安全修复以最新发行版为目标。旧版本的问题可能需要先升级到最新版再进行确认。
 
-- Description of the vulnerability
-- Steps to reproduce
-- Potential impact
-- Suggested fix (if any)
+请通过本仓库的 **GitHub Security Advisory（安全公告）** 私下报告漏洞，并提供受影响
+版本、复现步骤、影响以及可能的缓解方案。修复发布前请勿创建公开问题。
 
-### Response Timeline
-
-- We will acknowledge receipt within 48 hours
-- We will provide an initial assessment within 1 week
-- We will work on a fix and release a patch as soon as possible
-
-### Disclosure Policy
-
-- Please allow us reasonable time to fix the vulnerability before public disclosure
-- We will credit you in the fix announcement unless you prefer to remain anonymous
+我们计划在 48 小时内确认收到报告，在一周内给出初步评估，并在修复完成后协调披露。
+除非报告者要求匿名，否则会在修复说明中致谢。

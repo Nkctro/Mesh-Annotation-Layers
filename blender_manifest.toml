@@ -43,5 +43,5 @@ paths_exclude_pattern = [
   ".git/",
   ".github/",
   "dist/",
-  "package.py",
+  "tools/",
 ]
